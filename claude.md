@@ -8,12 +8,27 @@ AI must strictly refer to the following files in the `references/` directory for
   - Use this to replicate the visual layout, headers, and footer of the Tax Invoice.
 
 ## 2. Business Logic & Parsing
-### A. Command Parsing (Shortcut System)
-- The input must support `[ShortCode][Quantity][Unit]`.
+### A. Input Method — Multi-line Textarea
+- Input is a **multi-line textarea** (not a single-line field). The user types all lines at once and presses Enter between items (mobile-friendly).
+- **Line 1**: Store name (used to generate invoice number). Auto-updates invoice # display in real time.
+- **Lines 2+**: One product command per line. Empty lines are skipped.
+- Spaces within a command are ignored: `v 1 box` is treated identically to `v1box`.
+- Example:
+  ```
+  TK
+  c10
+  wc 25
+  rkc 1
+  v 1 box
+  ```
+
+### B. Command Parsing (Shortcut System)
+- Each product line supports `[ShortCode][Quantity][Unit]` (spaces stripped before parsing).
 - **Unit "box"**: If the input ends with `box` (e.g., `c2box`), Quantity = `2 * ea/box` value from the CSV[cite: 1].
 - **Unit "ea" (Default)**: If no unit is specified (e.g., `c10`), Quantity = `10`.
+- Unrecognized lines are skipped with a warning shown above the invoice; valid items still generate.
 
-### B. Strict Discount Hierarchy
+### C. Strict Discount Hierarchy
 - **Category A (Auto 10% Off)**: Products with `shorts` = `P`, `J`, or `N`[cite: 1].
   - These items ALWAYS get a 10% discount on the unit price.
   - **CRITICAL**: These items are EXCLUDED from global 2%/4% discounts.
@@ -21,13 +36,14 @@ AI must strictly refer to the following files in the `references/` directory for
   - Eligible for Global Discount buttons (2% or 4%).
 - **Special Case**: `shorts` = `Salt` should be labeled as "Special" in the discount column[cite: 1].
 
-### C. Payment Method & Cash Rounding
+### D. Payment Method & Cash Rounding
 - A **"Transfer" toggle button** must be present in the UI.
   - **Default state: OFF** (i.e., default payment is **Cash**).
   - When toggled ON, payment is **Transfer** — no rounding is applied.
+- **Pricing note**: All product prices in the CSV are **GST-inclusive**. Do NOT add GST on top; do NOT show a separate GST line on the invoice.
 - **Cash Rounding Rule** (Australian standard, applies only when Transfer is OFF):
-  - Applied AFTER all discounts (Category A 10%, global 2%/4%) and GST are calculated.
-  - Round the final "Total Inclusive G.S.T" to the nearest $0.05:
+  - Applied AFTER all discounts (Category A 10%, global 2%/4%) on the final total.
+  - Round the final total to the nearest $0.05:
     - Cents ending in 1–2 → round **down** (e.g. $37.51 → $37.50)
     - Cents ending in 3–7 → round to **5** (e.g. $37.56 → $37.55)
     - Cents ending in 8–9 → round **up** (e.g. $37.58 → $37.60)
@@ -51,15 +67,12 @@ AI must strictly refer to the following files in the `references/` directory for
   - Footer (Cash mode):
     - Sub Total
     - Global Discount (if applied, e.g. "Discount 2%")
-    - G.S.T (10%)
-    - Total Inclusive G.S.T
-    - Cash Rounding (e.g. `-$0.01` or `+$0.04`)
-    - **Cash Total** (highlighted)
+    - Cash Rounding (e.g. `-$0.01` or `+$0.04`, only if non-zero)
+    - **Cash Total** (highlighted) — no GST line, prices are GST-inclusive
   - Footer (Transfer mode):
     - Sub Total
     - Global Discount (if applied)
-    - G.S.T (10%)
-    - Total Inclusive G.S.T (no rounding lines)
+    - **Total** — no GST line, no rounding lines
 
 ## 5. Output Constraints
 - All responses should provide the full, runnable code within the single HTML file.

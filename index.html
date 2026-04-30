@@ -9,21 +9,28 @@
   <meta name="theme-color" content="#1d4ed8" />
   <title>My Sales Calc</title>
 
-  <!-- Tailwind CSS v2.2.19 (fixed) / 固定版本Tailwind -->
+  <!-- Tailwind CSS v2.2.19 (fixed) / 固定版本 -->
   <link rel="stylesheet" href="https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css" />
-  <!-- Lucide Icons v0.284.0 (fixed) / 固定版本图标库 -->
+  <!-- Lucide Icons v0.284.0 (fixed) / 固定版本图标 -->
   <script src="https://unpkg.com/lucide@0.284.0/dist/umd/lucide.min.js"></script>
 
   <style>
-    /* Prevent iOS auto-zoom on input focus / 防止iOS输入框聚焦时自动缩放 */
-    input[type="text"] { font-size: 16px; }
+    /* Prevent iOS auto-zoom / 防止 iOS 输入框自动缩放 */
+    textarea, input { font-size: 16px !important; }
 
-    /* Smooth button press feedback / 按钮点击反馈 */
+    /* Textarea monospace with line-height for readability / 等宽字体便于输入 */
+    #order-input {
+      font-family: 'Courier New', Courier, monospace;
+      line-height: 1.7;
+      caret-color: #2563eb;
+    }
+
+    /* First line highlight via gradient / 首行高亮（店名行） */
+    #order-input::placeholder { color: #d1d5db; }
+
     .btn-press:active { transform: scale(0.96); }
 
-    /* Invoice print styles / 发票打印样式 */
     @media print {
-      body { background: white; }
       .no-print { display: none !important; }
     }
   </style>
@@ -32,73 +39,54 @@
 <body class="bg-gray-50 min-h-screen">
 
 <!-- ============================================================ -->
-<!-- MAIN APP UI / 主应用界面                                       -->
+<!-- MAIN APP / 主界面                                             -->
 <!-- ============================================================ -->
-<div id="app" class="max-w-lg mx-auto px-3 py-4 pb-16">
+<div class="max-w-lg mx-auto px-3 py-4 pb-16">
 
-  <!-- Top Bar / 顶部栏 -->
+  <!-- Top bar / 顶部栏 -->
   <div class="flex items-center justify-between mb-3">
     <h1 class="text-xl font-bold text-gray-800 tracking-tight">My Sales Calc</h1>
     <button onclick="openHistory()"
-      class="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700 btn-press">
-      <i data-lucide="clock" class="w-4 h-4"></i>
-      History
+      class="flex items-center gap-1 text-blue-600 text-sm font-medium btn-press">
+      <i data-lucide="clock" class="w-4 h-4"></i> History
     </button>
   </div>
 
-  <!-- Invoice Number Row / 发票号行 -->
-  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 flex items-center gap-2">
-    <span class="text-xs text-gray-400 whitespace-nowrap font-medium">Store:</span>
-    <input id="store-input" type="text" placeholder="e.g. KFLFH" maxlength="20"
-      class="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm w-28 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
-      oninput="onStoreInput()" />
-    <span class="flex-1 text-right text-xs font-mono text-gray-400 truncate" id="inv-num-display"></span>
-  </div>
+  <!-- Order textarea card / 订单输入卡片 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 pt-3 pb-2 mb-1">
 
-  <!-- Command Input / 快捷码输入 -->
-  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
-    <div class="flex gap-2">
-      <input id="cmd-input" type="text"
-        placeholder="e.g.  c10  j2box  p1  salt1"
-        autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-        class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-      <button onclick="addItem()"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold btn-press transition-colors">
-        Add
-      </button>
+    <!-- Label row / 标签行 -->
+    <div class="flex items-center justify-between mb-1.5">
+      <div class="flex items-center gap-2 text-xs text-gray-400">
+        <span class="bg-blue-100 text-blue-600 font-bold px-1.5 py-0.5 rounded text-xs">Line 1</span>
+        <span>Store name</span>
+        <span class="text-gray-200">|</span>
+        <span class="bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded text-xs">Line 2+</span>
+        <span>Products</span>
+      </div>
+      <!-- Live invoice number / 实时发票号 -->
+      <span id="inv-num-display" class="text-xs font-mono text-gray-400 truncate max-w-xs"></span>
     </div>
-    <!-- Feedback messages / 反馈信息 -->
-    <div id="input-hint" class="text-xs text-green-600 mt-1.5 hidden"></div>
-    <div id="input-error" class="text-xs text-red-500 mt-1.5 hidden"></div>
+
+    <!-- Multi-line textarea / 多行输入框 -->
+    <textarea id="order-input" rows="8"
+      placeholder="TK&#10;c10&#10;wc 25&#10;rkc 1&#10;v 1 box&#10;j 2 box"
+      class="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none bg-gray-50"
+      oninput="onTextareaInput()"></textarea>
+
+    <!-- Parse preview / 解析预览（错误提示） -->
+    <div id="parse-errors" class="mt-1.5 hidden"></div>
   </div>
 
-  <!-- Cart Table / 购物车明细表 -->
-  <div class="bg-white rounded-2xl shadow-sm mb-3 overflow-hidden">
-    <table class="w-full text-sm">
-      <thead class="border-b border-gray-100">
-        <tr class="text-xs text-gray-400 uppercase tracking-wide">
-          <th class="px-3 py-2.5 text-left w-7 font-medium">#</th>
-          <th class="px-1 py-2.5 text-center w-11 font-medium">Qty</th>
-          <th class="px-1 py-2.5 text-left font-medium">Description</th>
-          <th class="px-1 py-2.5 text-center w-14 font-medium">Disc</th>
-          <th class="px-1 py-2.5 text-right w-20 font-medium">Total $</th>
-          <th class="w-8"></th>
-        </tr>
-      </thead>
-      <tbody id="cart-body">
-        <tr>
-          <td colspan="6" class="px-3 py-12 text-center text-gray-300 text-sm">
-            Cart is empty
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <!-- Inline hint / 内联提示 -->
+  <p class="text-xs text-gray-400 px-1 mb-3">
+    Spaces OK — <code class="bg-gray-100 px-1 rounded">v 1 box</code> = <code class="bg-gray-100 px-1 rounded">v1box</code>
+  </p>
 
-  <!-- Controls / 折扣与支付控制 -->
+  <!-- Discount & payment controls / 折扣与支付控制 -->
   <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
-    <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs text-gray-400 font-medium mr-1">Discount:</span>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-gray-400 font-medium">Discount:</span>
       <button id="btn-disc-2" onclick="setDiscount(2)"
         class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
         2% Off
@@ -108,7 +96,7 @@
         4% Off
       </button>
       <div class="flex-1"></div>
-      <!-- Transfer toggle (default OFF = Cash) / 转账切换（默认关闭=现金） -->
+      <!-- Transfer: default OFF (=Cash) / 默认关闭=现金 -->
       <button id="btn-transfer" onclick="toggleTransfer()"
         class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
         Transfer
@@ -116,36 +104,30 @@
     </div>
   </div>
 
-  <!-- Summary Panel / 汇总面板 -->
-  <div id="summary-panel" class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 hidden">
-    <div id="summary-rows"></div>
-  </div>
+  <!-- Generate button / 生成按钮 -->
+  <button onclick="generateInvoice()"
+    class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl text-base font-bold btn-press transition-colors flex items-center justify-center gap-2 mb-2">
+    <i data-lucide="file-text" class="w-5 h-5"></i>
+    Generate Invoice
+  </button>
 
-  <!-- Action Buttons / 操作按钮 -->
-  <div class="flex gap-2">
-    <button onclick="generateInvoice()"
-      class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-2xl text-sm font-bold btn-press transition-colors flex items-center justify-center gap-2">
-      <i data-lucide="file-text" class="w-4 h-4"></i>
-      Generate Invoice
-    </button>
-    <button onclick="clearCart()"
-      class="bg-red-50 hover:bg-red-100 text-red-400 px-5 py-3.5 rounded-2xl text-sm font-bold btn-press transition-colors">
-      Clear
-    </button>
-  </div>
+  <!-- Clear / 清空 -->
+  <button onclick="clearAll()"
+    class="w-full text-red-400 text-sm font-medium py-2 btn-press">
+    Clear
+  </button>
 
-</div><!-- /app -->
+</div>
 
 
 <!-- ============================================================ -->
-<!-- INVOICE MODAL / 发票预览模态框                                 -->
+<!-- INVOICE MODAL / 发票预览                                       -->
 <!-- ============================================================ -->
 <div id="invoice-modal"
   class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center">
   <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-[92vh] rounded-t-2xl">
 
-    <!-- Modal header / 模态框顶部 -->
-    <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
+    <div class="flex items-center justify-between px-4 py-3 border-b shrink-0 no-print">
       <span class="font-bold text-gray-800">Invoice Preview</span>
       <div class="flex gap-2 items-center">
         <button onclick="printInvoice()"
@@ -156,23 +138,21 @@
           class="bg-green-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold btn-press flex items-center gap-1">
           <i data-lucide="save" class="w-3 h-3"></i>Save
         </button>
-        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1 btn-press">
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
     </div>
 
-    <!-- Scrollable invoice body / 可滚动发票内容 -->
     <div class="overflow-y-auto flex-1 p-4">
       <div id="invoice-content"></div>
     </div>
-
   </div>
 </div>
 
 
 <!-- ============================================================ -->
-<!-- HISTORY MODAL / 历史记录模态框                                 -->
+<!-- HISTORY MODAL / 历史记录                                       -->
 <!-- ============================================================ -->
 <div id="history-modal"
   class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center">
@@ -180,13 +160,12 @@
 
     <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
       <span class="font-bold text-gray-800">Invoice History</span>
-      <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 p-1 btn-press">
+      <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
 
     <div id="history-list" class="overflow-y-auto flex-1 divide-y divide-gray-50"></div>
-
   </div>
 </div>
 
@@ -198,7 +177,7 @@
 'use strict';
 
 // ============================================================
-// 1. PRODUCT DATA / 产品数据 (from references/products - Sheet1.csv)
+// 1. PRODUCT DATA / 产品数据
 // ============================================================
 const PRODUCTS = [
   { no:1,  shorts:'WC',   name:'Wellbeing Kimchi 450g',              price:7.50,  eaBox:20 },
@@ -248,317 +227,220 @@ const PRODUCTS = [
   { no:55, shorts:'B',    name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
 ];
 
-// Category A: fixed 10% off, excluded from all global discounts
-// 类别A：固定9折，不参与全局折扣
+// Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
 const CAT_A = new Set(['P', 'J', 'N']);
 
-// Sort by shortcode length descending for longest-match parsing
-// 按快捷码长度降序排列，实现最长匹配解析（防止 "s" 误匹配 "ss" 等）
+// Longest-match parsing: sort by shortcode length descending
+// 最长匹配解析：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
 
 
 // ============================================================
-// 2. APPLICATION STATE / 应用状态
+// 2. STATE / 应用状态
 // ============================================================
-let cart = [];          // Array of { product, qty }
-let globalDiscount = 0; // 0 | 2 | 4  (percent)
-let isTransfer = false; // false = Cash (default) | true = Transfer
+let globalDiscount = 0; // 0 | 2 | 4
+let isTransfer     = false; // false = Cash (default) | true = Transfer
 
 
 // ============================================================
 // 3. COMMAND PARSING / 快捷码解析
 //    Format: [ShortCode][Quantity][Unit?]
-//    e.g. c10 | j2box | p1 | salt1box | 380 5
+//    Spaces are stripped first, so "v 1 box" → "v1box"
+//    空格会被去除，所以 "v 1 box" 等同于 "v1box"
 // ============================================================
 function parseCommand(raw) {
+  // Strip all whitespace / 去除所有空格
   const cmd = raw.trim().toLowerCase().replace(/\s+/g, '');
-  if (!cmd) return { error: 'Empty input' };
+  if (!cmd) return { error: 'empty' };
 
-  // Try each product shortcode as prefix, longest first
-  // 从最长的快捷码开始匹配，避免短码误匹配
   for (const product of SORTED_PRODUCTS) {
     const sc = product.shorts.toLowerCase();
     if (!cmd.startsWith(sc)) continue;
 
     const rest = cmd.slice(sc.length);
-    if (!rest) return { error: `Missing quantity after "${product.shorts}"` };
+    if (!rest) return { error: `Missing qty after "${product.shorts}"` };
 
-    // "2box" → qty = 2 × eaBox
-    const boxMatch = rest.match(/^(\d+)box$/);
-    // "10" or "10ea" → qty = 10
-    const eaMatch  = rest.match(/^(\d+)(ea)?$/);
+    const boxM = rest.match(/^(\d+)box$/);
+    const eaM  = rest.match(/^(\d+)(ea)?$/);
 
-    if (boxMatch) {
-      const qty = parseInt(boxMatch[1], 10) * product.eaBox;
-      return { product, qty };
-    }
-    if (eaMatch) {
-      const qty = parseInt(eaMatch[1], 10);
-      if (qty <= 0) return { error: 'Quantity must be greater than 0' };
+    if (boxM) return { product, qty: parseInt(boxM[1], 10) * product.eaBox };
+    if (eaM)  {
+      const qty = parseInt(eaM[1], 10);
+      if (qty <= 0) return { error: 'Qty must be > 0' };
       return { product, qty };
     }
   }
 
-  return { error: `Unknown shortcode: "${raw.trim()}"` };
+  return { error: `Unknown: "${raw.trim()}"` };
 }
 
 
 // ============================================================
-// 4. CART OPERATIONS / 购物车操作
+// 4. TEXTAREA PARSING / 多行输入解析
+//    Line 1 → store name
+//    Lines 2+ → product commands (empty lines skipped)
+//    第一行=店名，其余行=产品指令（空行跳过）
 // ============================================================
-function addItem() {
-  const input  = document.getElementById('cmd-input');
-  const errEl  = document.getElementById('input-error');
-  const hintEl = document.getElementById('input-hint');
-  const raw    = input.value;
+function parseTextarea() {
+  const raw   = document.getElementById('order-input').value;
+  const lines = raw.split('\n').map(l => l.trim());
 
-  if (!raw.trim()) return;
-
-  const result = parseCommand(raw);
-
-  if (result.error) {
-    errEl.textContent = result.error;
-    errEl.classList.remove('hidden');
-    hintEl.classList.add('hidden');
-    return;
+  // First non-empty line is store name / 第一个非空行为店名
+  let storeName = '';
+  let startIdx  = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i]) { storeName = lines[i]; startIdx = i + 1; break; }
   }
 
-  errEl.classList.add('hidden');
+  const items  = [];
+  const errors = [];
 
-  // Merge duplicate products / 合并重复产品
-  const existing = cart.find(i => i.product.shorts === result.product.shorts);
-  if (existing) {
-    existing.qty += result.qty;
-    hintEl.textContent = `Updated: ${result.product.name} → total ${existing.qty} ea`;
-  } else {
-    cart.push({ product: result.product, qty: result.qty });
-    hintEl.textContent = `Added: ${result.qty} × ${result.product.name}`;
+  for (let i = startIdx; i < lines.length; i++) {
+    if (!lines[i]) continue; // skip empty / 跳过空行
+    const result = parseCommand(lines[i]);
+    if (result.error) {
+      if (result.error !== 'empty') errors.push({ line: lines[i], msg: result.error });
+      continue;
+    }
+    // Merge duplicates / 合并重复产品
+    const existing = items.find(it => it.product.shorts === result.product.shorts);
+    if (existing) existing.qty += result.qty;
+    else items.push({ product: result.product, qty: result.qty });
   }
 
-  hintEl.classList.remove('hidden');
-  input.value = '';
-  input.focus();
-  renderAll();
-  persistCart();
-}
-
-function removeItem(idx) {
-  cart.splice(idx, 1);
-  renderAll();
-  persistCart();
-}
-
-function clearCart() {
-  if (cart.length > 0 && !confirm('Clear all items?')) return;
-  cart = [];
-  globalDiscount = 0;
-  isTransfer = false;
-  document.getElementById('input-hint').classList.add('hidden');
-  document.getElementById('input-error').classList.add('hidden');
-  renderAll();
-  persistCart();
+  return { storeName, items, errors };
 }
 
 
 // ============================================================
-// 5. DISCOUNT & PAYMENT / 折扣与支付方式
+// 5. CALCULATIONS / 金额计算 (prices are GST-inclusive / 含GST定价)
 // ============================================================
-function setDiscount(pct) {
-  // Toggle: clicking same value turns it off / 再次点击同一折扣则取消
-  globalDiscount = (globalDiscount === pct) ? 0 : pct;
-  renderAll();
-  persistCart();
-}
-
-function toggleTransfer() {
-  // Default OFF = Cash; ON = Transfer (no cash rounding)
-  // 默认关闭=现金；开启=转账（不进行现金取整）
-  isTransfer = !isTransfer;
-  renderAll();
-  persistCart();
-}
-
-
-// ============================================================
-// 6. CALCULATIONS / 金额计算
-// ============================================================
-
-// Per-line total (ex-GST) / 每行合计（不含GST）
 function lineTotal(product, qty) {
-  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9; // Auto 10% off
-  return product.price * qty; // Full price; global discount handled at footer
+  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9;
+  return product.price * qty;
 }
 
-// Discount label for the Disc. column / 折扣列标签
 function discLabel(product) {
-  if (CAT_A.has(product.shorts))  return '10%';
-  if (product.shorts === 'Salt')  return 'Special';
-  if (globalDiscount > 0)         return `${globalDiscount}%`;
+  if (CAT_A.has(product.shorts)) return '10%';
+  if (product.shorts === 'Salt') return 'Special';
+  if (globalDiscount > 0)        return `${globalDiscount}%`;
   return '';
 }
 
-// Full invoice summary calculation / 完整汇总计算
-function calcSummary() {
-  let subTotal  = 0; // Sum of all line totals (Cat A already discounted)
-  let catBTotal = 0; // Category B lines eligible for global discount
+function calcSummary(items) {
+  let subTotal  = 0;
+  let catBTotal = 0;
 
-  cart.forEach(({ product, qty }) => {
+  items.forEach(({ product, qty }) => {
     const lt = lineTotal(product, qty);
     subTotal += lt;
-    // Exclude Cat A and Salt from global discount pool
-    // 类别A和Salt不参与全局折扣
-    if (!CAT_A.has(product.shorts) && product.shorts !== 'Salt') {
-      catBTotal += lt;
-    }
+    if (!CAT_A.has(product.shorts) && product.shorts !== 'Salt') catBTotal += lt;
   });
 
-  const discAmt     = catBTotal * (globalDiscount / 100);
-  const afterDisc   = subTotal - discAmt;
-  const gst         = afterDisc * 0.1;            // GST 10% (prices are ex-GST)
-  const totalIncGST = afterDisc * 1.1;
+  const discAmt  = catBTotal * (globalDiscount / 100);
+  const afterDisc = subTotal - discAmt;
 
-  // Australian cash rounding: nearest $0.05, formula Math.round(x * 20) / 20
-  // 澳洲现金取整：最近5分，公式 Math.round(x * 20) / 20
+  // Australian cash rounding (nearest $0.05) / 澳洲现金取整（最近5分）
+  // Only when Transfer is OFF (Cash mode) / 仅限现金模式
   let cashRounding = 0;
-  let cashTotal    = totalIncGST;
+  let cashTotal    = afterDisc;
   if (!isTransfer) {
-    cashTotal    = Math.round(totalIncGST * 20) / 20;
-    cashRounding = parseFloat((cashTotal - totalIncGST).toFixed(2));
+    cashTotal    = Math.round(afterDisc * 20) / 20;
+    cashRounding = parseFloat((cashTotal - afterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, afterDisc, gst, totalIncGST, cashRounding, cashTotal };
+  return { subTotal, discAmt, afterDisc, cashRounding, cashTotal };
 }
 
 
 // ============================================================
-// 7. RENDERING / UI渲染
+// 6. LIVE TEXTAREA FEEDBACK / 实时输入反馈
 // ============================================================
-function renderAll() {
-  renderCartTable();
-  renderSummary();
+function onTextareaInput() {
+  const { storeName, items, errors } = parseTextarea();
+
+  // Update invoice number display / 更新发票号显示
+  const d    = new Date();
+  const dd   = String(d.getDate()).padStart(2, '0');
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const yy   = String(d.getFullYear()).slice(-2);
+  const inv  = `${dd}${mm}${yy}${storeName.toUpperCase().replace(/\s+/g, '')}`;
+  document.getElementById('inv-num-display').textContent = storeName ? inv : '';
+
+  // Show parse errors inline / 显示解析错误
+  const errEl = document.getElementById('parse-errors');
+  if (errors.length === 0) { errEl.classList.add('hidden'); return; }
+  errEl.classList.remove('hidden');
+  errEl.innerHTML = errors.map(e =>
+    `<div class="flex items-start gap-1 text-xs text-red-400 py-0.5">
+       <i data-lucide="alert-circle" class="w-3 h-3 mt-0.5 shrink-0"></i>
+       <span><code class="bg-red-50 px-1 rounded">${e.line}</code> — ${e.msg}</span>
+     </div>`
+  ).join('');
+  lucide.createIcons();
+
+  // Persist to localStorage / 保存到localStorage
+  localStorage.setItem('orderText_v2', document.getElementById('order-input').value);
+  localStorage.setItem('disc_v2', String(globalDiscount));
+  localStorage.setItem('transfer_v2', String(isTransfer));
+}
+
+
+// ============================================================
+// 7. CONTROLS / 折扣与支付控制
+// ============================================================
+function setDiscount(pct) {
+  globalDiscount = (globalDiscount === pct) ? 0 : pct;
   renderControlButtons();
+  onTextareaInput(); // re-run to persist
 }
 
-function renderCartTable() {
-  const tbody = document.getElementById('cart-body');
-
-  if (cart.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-3 py-12 text-center text-gray-300 text-sm">Cart is empty</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = cart.map(({ product, qty }, i) => {
-    const lt = lineTotal(product, qty);
-    const dl = discLabel(product);
-    const discClass =
-      CAT_A.has(product.shorts)   ? 'text-orange-500 font-bold' :
-      product.shorts === 'Salt'   ? 'text-purple-500 font-bold' :
-      dl                          ? 'text-blue-500 font-bold'   : 'text-gray-300';
-
-    return `
-      <tr class="border-t border-gray-50 hover:bg-gray-50 transition-colors">
-        <td class="px-3 py-2.5 text-xs text-gray-300">${i + 1}</td>
-        <td class="px-1 py-2.5 text-center text-sm font-semibold text-gray-800">${qty}</td>
-        <td class="px-1 py-2.5 text-xs text-gray-700 leading-snug">${product.name}</td>
-        <td class="px-1 py-2.5 text-center text-xs ${discClass}">${dl}</td>
-        <td class="px-1 py-2.5 text-right text-sm font-semibold text-gray-800">$${lt.toFixed(2)}</td>
-        <td class="pr-2 py-2.5">
-          <button onclick="removeItem(${i})"
-            class="text-gray-200 hover:text-red-400 transition-colors text-xl leading-none btn-press">×</button>
-        </td>
-      </tr>`;
-  }).join('');
-}
-
-function renderSummary() {
-  const panel = document.getElementById('summary-panel');
-  const rows  = document.getElementById('summary-rows');
-
-  if (cart.length === 0) { panel.classList.add('hidden'); return; }
-  panel.classList.remove('hidden');
-
-  const s = calcSummary();
-  const line = (label, value, cls = 'text-gray-600') =>
-    `<div class="flex justify-between items-center py-1">
-       <span class="text-sm ${cls}">${label}</span>
-       <span class="text-sm font-semibold ${cls}">${value}</span>
-     </div>`;
-
-  const parts = [];
-  parts.push(line('Sub Total', `$${s.subTotal.toFixed(2)}`));
-
-  if (s.discAmt > 0) {
-    parts.push(line(`Global Discount ${globalDiscount}%`, `-$${s.discAmt.toFixed(2)}`, 'text-blue-600'));
-  }
-
-  parts.push(`<div class="border-t border-gray-100 my-1"></div>`);
-  parts.push(line('G.S.T (10%)', `$${s.gst.toFixed(2)}`));
-  parts.push(line('Total Inclusive G.S.T', `$${s.totalIncGST.toFixed(2)}`, 'text-gray-800'));
-
-  if (!isTransfer) {
-    // Cash mode: show rounding adjustment and final cash total
-    // 现金模式：显示取整调整和最终现金合计
-    if (s.cashRounding !== 0) {
-      const absR  = Math.abs(s.cashRounding).toFixed(2);
-      const sign  = s.cashRounding > 0 ? '+$' : '-$';
-      parts.push(line('Cash Rounding', `${sign}${absR}`, 'text-gray-400 text-xs'));
-    }
-    parts.push(`<div class="border-t border-green-200 my-1"></div>`);
-    parts.push(`
-      <div class="flex justify-between items-center py-1.5">
-        <span class="font-bold text-green-700">Cash Total</span>
-        <span class="font-bold text-green-700 text-xl">$${s.cashTotal.toFixed(2)}</span>
-      </div>`);
-  } else {
-    // Transfer mode: show transfer total (= Total inc GST, no rounding)
-    // 转账模式：显示转账合计（等于含GST总额，无取整）
-    parts.push(`<div class="border-t border-blue-100 my-1"></div>`);
-    parts.push(`
-      <div class="flex justify-between items-center py-1.5">
-        <span class="font-bold text-blue-700">Transfer Total</span>
-        <span class="font-bold text-blue-700 text-xl">$${s.totalIncGST.toFixed(2)}</span>
-      </div>`);
-  }
-
-  rows.innerHTML = parts.join('');
+function toggleTransfer() {
+  isTransfer = !isTransfer;
+  renderControlButtons();
+  onTextareaInput();
 }
 
 function renderControlButtons() {
-  const base    = 'px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors';
-  const active  = `${base} bg-blue-600 text-white border-blue-600`;
+  const base     = 'px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors';
+  const active   = `${base} bg-blue-600 text-white border-blue-600`;
   const inactive = `${base} border-gray-200 text-gray-600 bg-white`;
+  document.getElementById('btn-disc-2').className   = globalDiscount === 2 ? active : inactive;
+  document.getElementById('btn-disc-4').className   = globalDiscount === 4 ? active : inactive;
+  document.getElementById('btn-transfer').className = isTransfer            ? active : inactive;
+}
 
-  document.getElementById('btn-disc-2').className    = globalDiscount === 2 ? active : inactive;
-  document.getElementById('btn-disc-4').className    = globalDiscount === 4 ? active : inactive;
-  document.getElementById('btn-transfer').className  = isTransfer            ? active : inactive;
+function clearAll() {
+  if (!confirm('Clear everything?')) return;
+  document.getElementById('order-input').value = '';
+  globalDiscount = 0;
+  isTransfer     = false;
+  document.getElementById('inv-num-display').textContent = '';
+  document.getElementById('parse-errors').classList.add('hidden');
+  renderControlButtons();
+  localStorage.removeItem('orderText_v2');
 }
 
 
 // ============================================================
-// 8. INVOICE NUMBER / 发票号生成
-//    Format: [DDMMYY][StoreInitial]  e.g. 300426KFLFH
+// 8. INVOICE NUMBER / 发票号
 // ============================================================
-function getInvNum() {
-  const d     = new Date();
-  const dd    = String(d.getDate()).padStart(2, '0');
-  const mm    = String(d.getMonth() + 1).padStart(2, '0');
-  const yy    = String(d.getFullYear()).slice(-2);
-  const store = (document.getElementById('store-input').value || '').trim().toUpperCase();
-  return `${dd}${mm}${yy}${store}`;
-}
-
-function onStoreInput() {
-  document.getElementById('inv-num-display').textContent = getInvNum();
-  localStorage.setItem('storeInitial', document.getElementById('store-input').value);
+function getInvNum(storeName) {
+  const d  = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}${mm}${yy}${storeName.toUpperCase().replace(/\s+/g, '')}`;
 }
 
 
 // ============================================================
-// 9. INVOICE HTML BUILDER / 发票HTML构建器
+// 9. INVOICE HTML BUILDER / 发票HTML构建
+//    Prices are GST-inclusive — no separate GST line on invoice
+//    价格含GST — 发票上不单独显示GST行
 // ============================================================
-function buildInvoiceHTML(invNum, dateStr, s) {
-  // Item rows / 产品明细行
-  const itemRows = cart.map(({ product, qty }, i) => {
+function buildInvoiceHTML(invNum, dateStr, items, s) {
+  const itemRows = items.map(({ product, qty }, i) => {
     const lt = lineTotal(product, qty);
     const dl = discLabel(product);
     const discStyle =
@@ -580,7 +462,8 @@ function buildInvoiceHTML(invNum, dateStr, s) {
     ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;">TRANSFER</span>`
     : `<span style="background:#dcfce7;color:#15803d;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;">CASH</span>`;
 
-  // Footer rows / 发票页脚行
+  // Footer rows — NO GST line (prices already include GST)
+  // 页脚行 — 不含GST行（定价已包含GST）
   let footerRows = `
     <tr>
       <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;color:#4b5563;">Sub Total</td>
@@ -595,19 +478,8 @@ function buildInvoiceHTML(invNum, dateStr, s) {
     </tr>`;
   }
 
-  footerRows += `
-    <tr style="border-top:1px solid #e5e7eb;">
-      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;color:#4b5563;">G.S.T (10%)</td>
-      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;font-weight:600;">$${s.gst.toFixed(2)}</td>
-    </tr>
-    <tr>
-      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;font-weight:700;color:#111827;">Total Inclusive G.S.T</td>
-      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;font-weight:700;color:#111827;">$${s.totalIncGST.toFixed(2)}</td>
-    </tr>`;
-
   if (!isTransfer) {
-    // Cash mode: rounding adjustment + Cash Total
-    // 现金模式：取整调整 + 现金合计
+    // Cash mode: rounding + Cash Total / 现金模式：取整 + 现金合计
     if (s.cashRounding !== 0) {
       const absR = Math.abs(s.cashRounding).toFixed(2);
       const sign = s.cashRounding > 0 ? '+$' : '-$';
@@ -619,8 +491,15 @@ function buildInvoiceHTML(invNum, dateStr, s) {
     }
     footerRows += `
     <tr style="border-top:2px solid #111827;">
-      <td colspan="4" style="text-align:right;font-size:14px;padding:5px 4px 2px 0;font-weight:700;">Cash Total</td>
-      <td style="text-align:right;font-size:14px;padding:5px 4px 2px 2px;font-weight:700;">$${s.cashTotal.toFixed(2)}</td>
+      <td colspan="4" style="text-align:right;font-size:14px;padding:6px 4px 2px 0;font-weight:700;">Cash Total</td>
+      <td style="text-align:right;font-size:14px;padding:6px 4px 2px 2px;font-weight:700;">$${s.cashTotal.toFixed(2)}</td>
+    </tr>`;
+  } else {
+    // Transfer mode: just show Total / 转账模式：直接显示合计
+    footerRows += `
+    <tr style="border-top:2px solid #111827;">
+      <td colspan="4" style="text-align:right;font-size:14px;padding:6px 4px 2px 0;font-weight:700;">Total</td>
+      <td style="text-align:right;font-size:14px;padding:6px 4px 2px 2px;font-weight:700;">$${s.afterDisc.toFixed(2)}</td>
     </tr>`;
   }
 
@@ -642,20 +521,17 @@ function buildInvoiceHTML(invNum, dateStr, s) {
         </div>
       </div>
 
-      <!-- Payment badge / 支付标签 -->
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-        ${payBadge}
-      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">${payBadge}</div>
 
-      <!-- Line items table / 产品明细表 -->
+      <!-- Line items / 产品明细 -->
       <table style="width:100%;border-collapse:collapse;border:1px solid #d1d5db;margin-bottom:10px;">
         <thead>
           <tr style="background:#f9fafb;border-bottom:1px solid #d1d5db;">
-            <th style="font-size:9px;padding:5px 2px 5px 4px;text-align:right;width:22px;font-weight:600;color:#6b7280;">No.</th>
-            <th style="font-size:9px;padding:5px 2px;text-align:center;width:36px;font-weight:600;color:#6b7280;">QTY</th>
-            <th style="font-size:9px;padding:5px 4px;text-align:left;font-weight:600;color:#6b7280;">Description</th>
-            <th style="font-size:9px;padding:5px 2px;text-align:center;width:44px;font-weight:600;color:#6b7280;">Disc.</th>
-            <th style="font-size:9px;padding:5px 4px 5px 2px;text-align:right;width:56px;font-weight:600;color:#6b7280;">Total $</th>
+            <th style="font-size:9px;padding:5px 2px 5px 4px;text-align:right;width:22px;color:#6b7280;">No.</th>
+            <th style="font-size:9px;padding:5px 2px;text-align:center;width:36px;color:#6b7280;">QTY</th>
+            <th style="font-size:9px;padding:5px 4px;text-align:left;color:#6b7280;">Description</th>
+            <th style="font-size:9px;padding:5px 2px;text-align:center;width:44px;color:#6b7280;">Disc.</th>
+            <th style="font-size:9px;padding:5px 4px 5px 2px;text-align:right;width:56px;color:#6b7280;">Total $</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
@@ -665,37 +541,58 @@ function buildInvoiceHTML(invNum, dateStr, s) {
       <table style="width:100%;border-collapse:collapse;">
         <colgroup>
           <col style="width:22px"><col style="width:36px">
-          <col><col style="width:44px"><col style="width:56px">
+          <col><col style="width:44px"><col style="width:60px">
         </colgroup>
         <tbody>${footerRows}</tbody>
       </table>
-
     </div>`;
 }
 
 
 // ============================================================
-// 10. INVOICE GENERATION & ACTIONS / 发票生成与操作
+// 10. GENERATE & MODAL ACTIONS / 生成发票与模态框操作
 // ============================================================
 let _currentInvoiceData = null;
 
 function generateInvoice() {
-  if (cart.length === 0) { alert('Cart is empty!'); return; }
+  const { storeName, items, errors } = parseTextarea();
 
-  const invNum  = getInvNum();
+  if (items.length === 0) {
+    alert(errors.length > 0
+      ? 'No valid products found. Please check your input.'
+      : 'Please enter products (line 2+).');
+    return;
+  }
+
+  const invNum  = getInvNum(storeName);
   const d       = new Date();
   const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  const s       = calcSummary();
-  const html    = buildInvoiceHTML(invNum, dateStr, s);
+  const s       = calcSummary(items);
+  const html    = buildInvoiceHTML(invNum, dateStr, items, s);
 
-  document.getElementById('invoice-content').innerHTML = html;
+  // Show parse warnings above invoice if any / 显示解析警告
+  let warningHtml = '';
+  if (errors.length > 0) {
+    warningHtml = `<div class="mb-3 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2">
+      <p class="text-xs font-semibold text-yellow-700 mb-1">Skipped ${errors.length} unrecognized line(s):</p>
+      ${errors.map(e => `<p class="text-xs text-yellow-600"><code>${e.line}</code> — ${e.msg}</p>`).join('')}
+    </div>`;
+  }
+
+  document.getElementById('invoice-content').innerHTML = warningHtml + html;
   document.getElementById('invoice-modal').classList.remove('hidden');
+  lucide.createIcons();
 
   _currentInvoiceData = {
-    invNum, dateStr,
-    cart: JSON.parse(JSON.stringify(cart)),
+    invNum, dateStr, storeName,
+    orderText: document.getElementById('order-input').value,
     globalDiscount, isTransfer, summary: s, html,
   };
+
+  // Persist state / 持久化状态
+  localStorage.setItem('orderText_v2', document.getElementById('order-input').value);
+  localStorage.setItem('disc_v2', String(globalDiscount));
+  localStorage.setItem('transfer_v2', String(isTransfer));
 }
 
 function saveAndClose() {
@@ -714,24 +611,21 @@ function printInvoice() {
   const html = document.getElementById('invoice-content').innerHTML;
   const w = window.open('', '_blank', 'width=600,height=800');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <style>
-      body { margin: 20px; font-family: 'Courier New', monospace; }
-      @media print { body { margin: 0; } }
-    </style></head>
-    <body>${html}
-    <script>window.onload = function(){ window.print(); setTimeout(window.close, 800); };<\/script>
+    <style>body{margin:20px;font-family:'Courier New',monospace;}@media print{body{margin:0;}}</style>
+    </head><body>${html}
+    <script>window.onload=function(){window.print();setTimeout(window.close,800);};<\/script>
     </body></html>`);
   w.document.close();
 }
 
 
 // ============================================================
-// 11. INDEXEDDB — INVOICE HISTORY / 历史发票（IndexedDB）
+// 11. INDEXEDDB — HISTORY / 历史发票
 // ============================================================
 let db = null;
 
 function initDB(cb) {
-  const req = indexedDB.open('SalesCalcDB', 1);
+  const req = indexedDB.open('SalesCalcDB', 2);
   req.onupgradeneeded = e => {
     const d = e.target.result;
     if (!d.objectStoreNames.contains('invoices')) {
@@ -761,9 +655,7 @@ function closeHistory() {
 function renderHistory() {
   if (!db) return;
   const el  = document.getElementById('history-list');
-  const tx  = db.transaction('invoices', 'readonly');
-  const req = tx.objectStore('invoices').getAll();
-
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
   req.onsuccess = e => {
     const list = e.target.result.reverse();
     if (!list.length) {
@@ -771,10 +663,10 @@ function renderHistory() {
       return;
     }
     el.innerHTML = list.map(inv => {
-      const total = inv.isTransfer
-        ? inv.summary.totalIncGST.toFixed(2)
-        : inv.summary.cashTotal.toFixed(2);
-      const modeBadge = inv.isTransfer
+      const total = (inv.isTransfer
+        ? inv.summary.afterDisc
+        : inv.summary.cashTotal).toFixed(2);
+      const badge = inv.isTransfer
         ? `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`
         : `<span class="text-xs text-green-600 font-semibold">Cash</span>`;
       return `
@@ -782,9 +674,8 @@ function renderHistory() {
              onclick="viewSavedInvoice('${inv.invNum}')">
           <div class="flex-1 min-w-0">
             <div class="text-sm font-mono font-bold text-gray-800 truncate">${inv.invNum}</div>
-            <div class="flex items-center gap-1.5 mt-0.5">
+            <div class="flex items-center gap-1.5 mt-0.5">${badge}
               <span class="text-xs text-gray-400">${inv.dateStr}</span>
-              ${modeBadge}
             </div>
           </div>
           <div class="text-base font-bold text-gray-700 ml-2">$${total}</div>
@@ -797,8 +688,7 @@ function renderHistory() {
 
 function viewSavedInvoice(invNum) {
   if (!db) return;
-  const tx  = db.transaction('invoices', 'readonly');
-  const req = tx.objectStore('invoices').get(invNum);
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').get(invNum);
   req.onsuccess = e => {
     const inv = e.target.result;
     if (!inv) return;
@@ -811,69 +701,43 @@ function viewSavedInvoice(invNum) {
 
 
 // ============================================================
-// 12. LOCALSTORAGE — CART PERSISTENCE / 购物车持久化（localStorage）
+// 12. LOCALSTORAGE PERSISTENCE / 持久化
 // ============================================================
-function persistCart() {
-  localStorage.setItem('cart_v1', JSON.stringify({ cart, globalDiscount, isTransfer }));
-}
-
-function loadCart() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('cart_v1'));
-    if (!saved) return;
-    // Re-link product objects by shortcode / 通过快捷码重新关联产品对象
-    cart = (saved.cart || []).map(item => {
-      const product = PRODUCTS.find(p => p.shorts === item.product.shorts);
-      return product ? { product, qty: item.qty } : null;
-    }).filter(Boolean);
-    globalDiscount = saved.globalDiscount || 0;
-    isTransfer     = !!saved.isTransfer;
-  } catch { /* ignore corrupt data / 忽略损坏数据 */ }
-}
-
-function loadStore() {
-  const s = localStorage.getItem('storeInitial') || '';
-  document.getElementById('store-input').value = s;
-  document.getElementById('inv-num-display').textContent = getInvNum();
+function loadPersistedState() {
+  const text = localStorage.getItem('orderText_v2');
+  if (text) document.getElementById('order-input').value = text;
+  globalDiscount = parseInt(localStorage.getItem('disc_v2') || '0', 10);
+  isTransfer     = localStorage.getItem('transfer_v2') === 'true';
+  renderControlButtons();
+  onTextareaInput(); // refresh displays
 }
 
 
 // ============================================================
-// 13. SERVICE WORKER (PWA OFFLINE) / 离线服务工作者
-//     Caches CDN assets for offline use / 缓存CDN资源以供离线使用
+// 13. SERVICE WORKER (PWA) / 离线缓存
 // ============================================================
-(function registerSW() {
+(function() {
   if (!('serviceWorker' in navigator)) return;
-  const swCode = `
-    const CACHE = 'msc-v1';
-    const CDN = [
+  const code = `
+    const C='msc-v2';
+    const URLS=[
       'https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css',
       'https://unpkg.com/lucide@0.284.0/dist/umd/lucide.min.js'
     ];
-    self.addEventListener('install', e =>
-      e.waitUntil(caches.open(CACHE).then(c => c.addAll(CDN)))
-    );
-    self.addEventListener('fetch', e =>
-      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)))
-    );
+    self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(URLS))));
+    self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
   `;
-  const blob = new Blob([swCode], { type: 'application/javascript' });
-  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+  navigator.serviceWorker
+    .register(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })))
+    .catch(() => {});
 })();
 
 
 // ============================================================
 // 14. INIT / 初始化
 // ============================================================
-document.getElementById('cmd-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); addItem(); }
-});
-
-// Boot sequence / 启动序列
 initDB(() => {
-  loadCart();
-  loadStore();
-  renderAll();
+  loadPersistedState();
   lucide.createIcons();
 });
 </script>
