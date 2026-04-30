@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 移动端视口 / Mobile viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>My Sales Calc</title>
+
+  <!-- Tailwind CSS v2.2.19 (fixed) / 固定版本Tailwind -->
+  <link rel="stylesheet" href="https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css" />
+  <!-- Lucide Icons v0.284.0 (fixed) / 固定版本图标库 -->
+  <script src="https://unpkg.com/lucide@0.284.0/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Prevent iOS auto-zoom on input focus / 防止iOS输入框聚焦时自动缩放 */
+    input[type="text"] { font-size: 16px; }
+
+    /* Smooth button press feedback / 按钮点击反馈 */
+    .btn-press:active { transform: scale(0.96); }
+
+    /* Invoice print styles / 发票打印样式 */
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ============================================================ -->
+<!-- MAIN APP UI / 主应用界面                                       -->
+<!-- ============================================================ -->
+<div id="app" class="max-w-lg mx-auto px-3 py-4 pb-16">
+
+  <!-- Top Bar / 顶部栏 -->
+  <div class="flex items-center justify-between mb-3">
+    <h1 class="text-xl font-bold text-gray-800 tracking-tight">My Sales Calc</h1>
+    <button onclick="openHistory()"
+      class="flex items-center gap-1 text-blue-600 text-sm font-medium hover:text-blue-700 btn-press">
+      <i data-lucide="clock" class="w-4 h-4"></i>
+      History
+    </button>
+  </div>
+
+  <!-- Invoice Number Row / 发票号行 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 flex items-center gap-2">
+    <span class="text-xs text-gray-400 whitespace-nowrap font-medium">Store:</span>
+    <input id="store-input" type="text" placeholder="e.g. KFLFH" maxlength="20"
+      class="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm w-28 uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400"
+      oninput="onStoreInput()" />
+    <span class="flex-1 text-right text-xs font-mono text-gray-400 truncate" id="inv-num-display"></span>
+  </div>
+
+  <!-- Command Input / 快捷码输入 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <div class="flex gap-2">
+      <input id="cmd-input" type="text"
+        placeholder="e.g.  c10  j2box  p1  salt1"
+        autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+        class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <button onclick="addItem()"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold btn-press transition-colors">
+        Add
+      </button>
+    </div>
+    <!-- Feedback messages / 反馈信息 -->
+    <div id="input-hint" class="text-xs text-green-600 mt-1.5 hidden"></div>
+    <div id="input-error" class="text-xs text-red-500 mt-1.5 hidden"></div>
+  </div>
+
+  <!-- Cart Table / 购物车明细表 -->
+  <div class="bg-white rounded-2xl shadow-sm mb-3 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="border-b border-gray-100">
+        <tr class="text-xs text-gray-400 uppercase tracking-wide">
+          <th class="px-3 py-2.5 text-left w-7 font-medium">#</th>
+          <th class="px-1 py-2.5 text-center w-11 font-medium">Qty</th>
+          <th class="px-1 py-2.5 text-left font-medium">Description</th>
+          <th class="px-1 py-2.5 text-center w-14 font-medium">Disc</th>
+          <th class="px-1 py-2.5 text-right w-20 font-medium">Total $</th>
+          <th class="w-8"></th>
+        </tr>
+      </thead>
+      <tbody id="cart-body">
+        <tr>
+          <td colspan="6" class="px-3 py-12 text-center text-gray-300 text-sm">
+            Cart is empty
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Controls / 折扣与支付控制 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-400 font-medium mr-1">Discount:</span>
+      <button id="btn-disc-2" onclick="setDiscount(2)"
+        class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
+        2% Off
+      </button>
+      <button id="btn-disc-4" onclick="setDiscount(4)"
+        class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
+        4% Off
+      </button>
+      <div class="flex-1"></div>
+      <!-- Transfer toggle (default OFF = Cash) / 转账切换（默认关闭=现金） -->
+      <button id="btn-transfer" onclick="toggleTransfer()"
+        class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
+        Transfer
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Panel / 汇总面板 -->
+  <div id="summary-panel" class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3 hidden">
+    <div id="summary-rows"></div>
+  </div>
+
+  <!-- Action Buttons / 操作按钮 -->
+  <div class="flex gap-2">
+    <button onclick="generateInvoice()"
+      class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-2xl text-sm font-bold btn-press transition-colors flex items-center justify-center gap-2">
+      <i data-lucide="file-text" class="w-4 h-4"></i>
+      Generate Invoice
+    </button>
+    <button onclick="clearCart()"
+      class="bg-red-50 hover:bg-red-100 text-red-400 px-5 py-3.5 rounded-2xl text-sm font-bold btn-press transition-colors">
+      Clear
+    </button>
+  </div>
+
+</div><!-- /app -->
+
+
+<!-- ============================================================ -->
+<!-- INVOICE MODAL / 发票预览模态框                                 -->
+<!-- ============================================================ -->
+<div id="invoice-modal"
+  class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center">
+  <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-[92vh] rounded-t-2xl">
+
+    <!-- Modal header / 模态框顶部 -->
+    <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
+      <span class="font-bold text-gray-800">Invoice Preview</span>
+      <div class="flex gap-2 items-center">
+        <button onclick="printInvoice()"
+          class="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold btn-press flex items-center gap-1">
+          <i data-lucide="printer" class="w-3 h-3"></i>Print
+        </button>
+        <button onclick="saveAndClose()"
+          class="bg-green-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold btn-press flex items-center gap-1">
+          <i data-lucide="save" class="w-3 h-3"></i>Save
+        </button>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1 btn-press">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrollable invoice body / 可滚动发票内容 -->
+    <div class="overflow-y-auto flex-1 p-4">
+      <div id="invoice-content"></div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- HISTORY MODAL / 历史记录模态框                                 -->
+<!-- ============================================================ -->
+<div id="history-modal"
+  class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center">
+  <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-[80vh] rounded-t-2xl">
+
+    <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
+      <span class="font-bold text-gray-800">Invoice History</span>
+      <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 p-1 btn-press">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <div id="history-list" class="overflow-y-auto flex-1 divide-y divide-gray-50"></div>
+
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT / 应用逻辑                                          -->
+<!-- ============================================================ -->
+<script>
+'use strict';
+
+// ============================================================
+// 1. PRODUCT DATA / 产品数据 (from references/products - Sheet1.csv)
+// ============================================================
+const PRODUCTS = [
+  { no:1,  shorts:'WC',   name:'Wellbeing Kimchi 450g',              price:7.50,  eaBox:20 },
+  { no:2,  shorts:'W95',  name:'Wellbeing Kimchi 950g',              price:14.50, eaBox:8  },
+  { no:3,  shorts:'380',  name:'Mat Kimchi Sliced 380g',             price:6.20,  eaBox:20 },
+  { no:4,  shorts:'N',    name:'Mat Kimchi Sliced 400g',             price:6.40,  eaBox:20 },
+  { no:5,  shorts:'C',    name:'Mat Kimchi Sliced 450g',             price:6.90,  eaBox:20 },
+  { no:6,  shorts:'95',   name:'Mat Kimchi Sliced 950g',             price:13.80, eaBox:8  },
+  { no:7,  shorts:'1.5K', name:'Mat Kimchi Sliced 1.5kg',            price:18.90, eaBox:8  },
+  { no:8,  shorts:'2K',   name:'Mat Kimchi Sliced 2kg',              price:22.00, eaBox:10 },
+  { no:13, shorts:'O',    name:'Glass Jar Original 400g',            price:7.60,  eaBox:9  },
+  { no:14, shorts:'V',    name:'Glass Jar Vegan 400g',               price:7.60,  eaBox:9  },
+  { no:15, shorts:'W',    name:'Glass Jar White Kimchi 400g',        price:7.60,  eaBox:9  },
+  { no:16, shorts:'4K',   name:'Whole Cabbage Kimchi 4kg',           price:44.00, eaBox:4  },
+  { no:18, shorts:'BOC',  name:'Bossam Kimchi 450g',                 price:8.00,  eaBox:20 },
+  { no:19, shorts:'WK',   name:'White Kimchi 450g',                  price:6.90,  eaBox:20 },
+  { no:20, shorts:'RKC',  name:'Radish Kimchi 450g',                 price:6.20,  eaBox:20 },
+  { no:21, shorts:'RK2',  name:'Radish Kimchi 2kg',                  price:19.30, eaBox:10 },
+  { no:22, shorts:'RS',   name:'Radish Salad 450g',                  price:6.20,  eaBox:20 },
+  { no:23, shorts:'F',    name:'Fried Kimchi 300g',                  price:4.90,  eaBox:20 },
+  { no:24, shorts:'PR',   name:'Pickled Radish 500g',                price:4.90,  eaBox:20 },
+  { no:25, shorts:'DRS',  name:'Dried Radish (Spicy)',               price:3.80,  eaBox:50 },
+  { no:26, shorts:'BF',   name:'Seasoned Balloon Flower',            price:4.30,  eaBox:50 },
+  { no:27, shorts:'RSS',  name:'Roasted Squid (Spicy)',              price:7.90,  eaBox:50 },
+  { no:28, shorts:'SS',   name:'Seaweed Salad',                      price:3.60,  eaBox:50 },
+  { no:31, shorts:'PGS',  name:'Pickled Garlic Stem',                price:4.30,  eaBox:50 },
+  { no:32, shorts:'CG',   name:'Garlic Stem with Chilli Paste',      price:4.30,  eaBox:50 },
+  { no:33, shorts:'FG',   name:'Garlic Stem with Fishcake',          price:4.30,  eaBox:50 },
+  { no:36, shorts:'LR',   name:'Roasted Lotus Root',                 price:3.90,  eaBox:50 },
+  { no:37, shorts:'FSS',  name:'Frozen Salted Shrimp',               price:6.30,  eaBox:20 },
+  { no:39, shorts:'SSK',  name:'Sweet Sour Kimchi',                  price:4.90,  eaBox:20 },
+  { no:40, shorts:'SO',   name:'Spring Onion',                       price:7.50,  eaBox:24 },
+  { no:41, shorts:'SQ',   name:'Salted Squid',                       price:4.50,  eaBox:50 },
+  { no:42, shorts:'PG',   name:'Peeled Garlic',                      price:2.70,  eaBox:50 },
+  { no:43, shorts:'GG',   name:'Ground Garlic',                      price:3.40,  eaBox:50 },
+  { no:44, shorts:'A',    name:'Cabbage Kimchi',                     price:5.70,  eaBox:20 },
+  { no:45, shorts:'J',    name:'Jarae Roasted Seaweed',              price:70.00, eaBox:10 },
+  { no:46, shorts:'P',    name:'Parae Roasted Seaweed',              price:70.00, eaBox:10 },
+  { no:47, shorts:'Salt', name:'Premium Sea Salt 5kg',               price:19.00, eaBox:4  },
+  { no:48, shorts:'BC',   name:'Teriyaki Chicken Bun',               price:11.60, eaBox:3  },
+  { no:49, shorts:'BP',   name:'BBQ Pork Bun',                       price:11.60, eaBox:3  },
+  { no:50, shorts:'GB',   name:'Beef & Ginger Gyoza',                price:12.30, eaBox:3  },
+  { no:51, shorts:'GP',   name:'Free Range Pork Gyoza',              price:12.30, eaBox:3  },
+  { no:52, shorts:'S',    name:'bibigo Sliced Kimchi 400g',          price:5.80,  eaBox:6  },
+  { no:53, shorts:'VS',   name:'bibigo Vegan Sliced Kimchi 400g',    price:6.90,  eaBox:6  },
+  { no:54, shorts:'M',    name:'bibigo Sliced Kimchi 900g',          price:7.50,  eaBox:8  },
+  { no:55, shorts:'B',    name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
+];
+
+// Category A: fixed 10% off, excluded from all global discounts
+// 类别A：固定9折，不参与全局折扣
+const CAT_A = new Set(['P', 'J', 'N']);
+
+// Sort by shortcode length descending for longest-match parsing
+// 按快捷码长度降序排列，实现最长匹配解析（防止 "s" 误匹配 "ss" 等）
+const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
+
+
+// ============================================================
+// 2. APPLICATION STATE / 应用状态
+// ============================================================
+let cart = [];          // Array of { product, qty }
+let globalDiscount = 0; // 0 | 2 | 4  (percent)
+let isTransfer = false; // false = Cash (default) | true = Transfer
+
+
+// ============================================================
+// 3. COMMAND PARSING / 快捷码解析
+//    Format: [ShortCode][Quantity][Unit?]
+//    e.g. c10 | j2box | p1 | salt1box | 380 5
+// ============================================================
+function parseCommand(raw) {
+  const cmd = raw.trim().toLowerCase().replace(/\s+/g, '');
+  if (!cmd) return { error: 'Empty input' };
+
+  // Try each product shortcode as prefix, longest first
+  // 从最长的快捷码开始匹配，避免短码误匹配
+  for (const product of SORTED_PRODUCTS) {
+    const sc = product.shorts.toLowerCase();
+    if (!cmd.startsWith(sc)) continue;
+
+    const rest = cmd.slice(sc.length);
+    if (!rest) return { error: `Missing quantity after "${product.shorts}"` };
+
+    // "2box" → qty = 2 × eaBox
+    const boxMatch = rest.match(/^(\d+)box$/);
+    // "10" or "10ea" → qty = 10
+    const eaMatch  = rest.match(/^(\d+)(ea)?$/);
+
+    if (boxMatch) {
+      const qty = parseInt(boxMatch[1], 10) * product.eaBox;
+      return { product, qty };
+    }
+    if (eaMatch) {
+      const qty = parseInt(eaMatch[1], 10);
+      if (qty <= 0) return { error: 'Quantity must be greater than 0' };
+      return { product, qty };
+    }
+  }
+
+  return { error: `Unknown shortcode: "${raw.trim()}"` };
+}
+
+
+// ============================================================
+// 4. CART OPERATIONS / 购物车操作
+// ============================================================
+function addItem() {
+  const input  = document.getElementById('cmd-input');
+  const errEl  = document.getElementById('input-error');
+  const hintEl = document.getElementById('input-hint');
+  const raw    = input.value;
+
+  if (!raw.trim()) return;
+
+  const result = parseCommand(raw);
+
+  if (result.error) {
+    errEl.textContent = result.error;
+    errEl.classList.remove('hidden');
+    hintEl.classList.add('hidden');
+    return;
+  }
+
+  errEl.classList.add('hidden');
+
+  // Merge duplicate products / 合并重复产品
+  const existing = cart.find(i => i.product.shorts === result.product.shorts);
+  if (existing) {
+    existing.qty += result.qty;
+    hintEl.textContent = `Updated: ${result.product.name} → total ${existing.qty} ea`;
+  } else {
+    cart.push({ product: result.product, qty: result.qty });
+    hintEl.textContent = `Added: ${result.qty} × ${result.product.name}`;
+  }
+
+  hintEl.classList.remove('hidden');
+  input.value = '';
+  input.focus();
+  renderAll();
+  persistCart();
+}
+
+function removeItem(idx) {
+  cart.splice(idx, 1);
+  renderAll();
+  persistCart();
+}
+
+function clearCart() {
+  if (cart.length > 0 && !confirm('Clear all items?')) return;
+  cart = [];
+  globalDiscount = 0;
+  isTransfer = false;
+  document.getElementById('input-hint').classList.add('hidden');
+  document.getElementById('input-error').classList.add('hidden');
+  renderAll();
+  persistCart();
+}
+
+
+// ============================================================
+// 5. DISCOUNT & PAYMENT / 折扣与支付方式
+// ============================================================
+function setDiscount(pct) {
+  // Toggle: clicking same value turns it off / 再次点击同一折扣则取消
+  globalDiscount = (globalDiscount === pct) ? 0 : pct;
+  renderAll();
+  persistCart();
+}
+
+function toggleTransfer() {
+  // Default OFF = Cash; ON = Transfer (no cash rounding)
+  // 默认关闭=现金；开启=转账（不进行现金取整）
+  isTransfer = !isTransfer;
+  renderAll();
+  persistCart();
+}
+
+
+// ============================================================
+// 6. CALCULATIONS / 金额计算
+// ============================================================
+
+// Per-line total (ex-GST) / 每行合计（不含GST）
+function lineTotal(product, qty) {
+  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9; // Auto 10% off
+  return product.price * qty; // Full price; global discount handled at footer
+}
+
+// Discount label for the Disc. column / 折扣列标签
+function discLabel(product) {
+  if (CAT_A.has(product.shorts))  return '10%';
+  if (product.shorts === 'Salt')  return 'Special';
+  if (globalDiscount > 0)         return `${globalDiscount}%`;
+  return '';
+}
+
+// Full invoice summary calculation / 完整汇总计算
+function calcSummary() {
+  let subTotal  = 0; // Sum of all line totals (Cat A already discounted)
+  let catBTotal = 0; // Category B lines eligible for global discount
+
+  cart.forEach(({ product, qty }) => {
+    const lt = lineTotal(product, qty);
+    subTotal += lt;
+    // Exclude Cat A and Salt from global discount pool
+    // 类别A和Salt不参与全局折扣
+    if (!CAT_A.has(product.shorts) && product.shorts !== 'Salt') {
+      catBTotal += lt;
+    }
+  });
+
+  const discAmt     = catBTotal * (globalDiscount / 100);
+  const afterDisc   = subTotal - discAmt;
+  const gst         = afterDisc * 0.1;            // GST 10% (prices are ex-GST)
+  const totalIncGST = afterDisc * 1.1;
+
+  // Australian cash rounding: nearest $0.05, formula Math.round(x * 20) / 20
+  // 澳洲现金取整：最近5分，公式 Math.round(x * 20) / 20
+  let cashRounding = 0;
+  let cashTotal    = totalIncGST;
+  if (!isTransfer) {
+    cashTotal    = Math.round(totalIncGST * 20) / 20;
+    cashRounding = parseFloat((cashTotal - totalIncGST).toFixed(2));
+  }
+
+  return { subTotal, discAmt, afterDisc, gst, totalIncGST, cashRounding, cashTotal };
+}
+
+
+// ============================================================
+// 7. RENDERING / UI渲染
+// ============================================================
+function renderAll() {
+  renderCartTable();
+  renderSummary();
+  renderControlButtons();
+}
+
+function renderCartTable() {
+  const tbody = document.getElementById('cart-body');
+
+  if (cart.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="px-3 py-12 text-center text-gray-300 text-sm">Cart is empty</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = cart.map(({ product, qty }, i) => {
+    const lt = lineTotal(product, qty);
+    const dl = discLabel(product);
+    const discClass =
+      CAT_A.has(product.shorts)   ? 'text-orange-500 font-bold' :
+      product.shorts === 'Salt'   ? 'text-purple-500 font-bold' :
+      dl                          ? 'text-blue-500 font-bold'   : 'text-gray-300';
+
+    return `
+      <tr class="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+        <td class="px-3 py-2.5 text-xs text-gray-300">${i + 1}</td>
+        <td class="px-1 py-2.5 text-center text-sm font-semibold text-gray-800">${qty}</td>
+        <td class="px-1 py-2.5 text-xs text-gray-700 leading-snug">${product.name}</td>
+        <td class="px-1 py-2.5 text-center text-xs ${discClass}">${dl}</td>
+        <td class="px-1 py-2.5 text-right text-sm font-semibold text-gray-800">$${lt.toFixed(2)}</td>
+        <td class="pr-2 py-2.5">
+          <button onclick="removeItem(${i})"
+            class="text-gray-200 hover:text-red-400 transition-colors text-xl leading-none btn-press">×</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function renderSummary() {
+  const panel = document.getElementById('summary-panel');
+  const rows  = document.getElementById('summary-rows');
+
+  if (cart.length === 0) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+
+  const s = calcSummary();
+  const line = (label, value, cls = 'text-gray-600') =>
+    `<div class="flex justify-between items-center py-1">
+       <span class="text-sm ${cls}">${label}</span>
+       <span class="text-sm font-semibold ${cls}">${value}</span>
+     </div>`;
+
+  const parts = [];
+  parts.push(line('Sub Total', `$${s.subTotal.toFixed(2)}`));
+
+  if (s.discAmt > 0) {
+    parts.push(line(`Global Discount ${globalDiscount}%`, `-$${s.discAmt.toFixed(2)}`, 'text-blue-600'));
+  }
+
+  parts.push(`<div class="border-t border-gray-100 my-1"></div>`);
+  parts.push(line('G.S.T (10%)', `$${s.gst.toFixed(2)}`));
+  parts.push(line('Total Inclusive G.S.T', `$${s.totalIncGST.toFixed(2)}`, 'text-gray-800'));
+
+  if (!isTransfer) {
+    // Cash mode: show rounding adjustment and final cash total
+    // 现金模式：显示取整调整和最终现金合计
+    if (s.cashRounding !== 0) {
+      const absR  = Math.abs(s.cashRounding).toFixed(2);
+      const sign  = s.cashRounding > 0 ? '+$' : '-$';
+      parts.push(line('Cash Rounding', `${sign}${absR}`, 'text-gray-400 text-xs'));
+    }
+    parts.push(`<div class="border-t border-green-200 my-1"></div>`);
+    parts.push(`
+      <div class="flex justify-between items-center py-1.5">
+        <span class="font-bold text-green-700">Cash Total</span>
+        <span class="font-bold text-green-700 text-xl">$${s.cashTotal.toFixed(2)}</span>
+      </div>`);
+  } else {
+    // Transfer mode: show transfer total (= Total inc GST, no rounding)
+    // 转账模式：显示转账合计（等于含GST总额，无取整）
+    parts.push(`<div class="border-t border-blue-100 my-1"></div>`);
+    parts.push(`
+      <div class="flex justify-between items-center py-1.5">
+        <span class="font-bold text-blue-700">Transfer Total</span>
+        <span class="font-bold text-blue-700 text-xl">$${s.totalIncGST.toFixed(2)}</span>
+      </div>`);
+  }
+
+  rows.innerHTML = parts.join('');
+}
+
+function renderControlButtons() {
+  const base    = 'px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors';
+  const active  = `${base} bg-blue-600 text-white border-blue-600`;
+  const inactive = `${base} border-gray-200 text-gray-600 bg-white`;
+
+  document.getElementById('btn-disc-2').className    = globalDiscount === 2 ? active : inactive;
+  document.getElementById('btn-disc-4').className    = globalDiscount === 4 ? active : inactive;
+  document.getElementById('btn-transfer').className  = isTransfer            ? active : inactive;
+}
+
+
+// ============================================================
+// 8. INVOICE NUMBER / 发票号生成
+//    Format: [DDMMYY][StoreInitial]  e.g. 300426KFLFH
+// ============================================================
+function getInvNum() {
+  const d     = new Date();
+  const dd    = String(d.getDate()).padStart(2, '0');
+  const mm    = String(d.getMonth() + 1).padStart(2, '0');
+  const yy    = String(d.getFullYear()).slice(-2);
+  const store = (document.getElementById('store-input').value || '').trim().toUpperCase();
+  return `${dd}${mm}${yy}${store}`;
+}
+
+function onStoreInput() {
+  document.getElementById('inv-num-display').textContent = getInvNum();
+  localStorage.setItem('storeInitial', document.getElementById('store-input').value);
+}
+
+
+// ============================================================
+// 9. INVOICE HTML BUILDER / 发票HTML构建器
+// ============================================================
+function buildInvoiceHTML(invNum, dateStr, s) {
+  // Item rows / 产品明细行
+  const itemRows = cart.map(({ product, qty }, i) => {
+    const lt = lineTotal(product, qty);
+    const dl = discLabel(product);
+    const discStyle =
+      CAT_A.has(product.shorts) ? 'color:#f97316;font-weight:700;' :
+      product.shorts === 'Salt' ? 'color:#a855f7;font-weight:700;' :
+      dl                        ? 'color:#3b82f6;font-weight:700;' : '';
+    return `
+      <tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:4px 2px 4px 4px;font-size:10px;color:#d1d5db;text-align:right;">${i + 1}</td>
+        <td style="padding:4px 2px;font-size:11px;font-weight:600;text-align:center;">${qty}</td>
+        <td style="padding:4px 4px;font-size:11px;">${product.name}</td>
+        <td style="padding:4px 2px;font-size:11px;text-align:center;${discStyle}">${dl}</td>
+        <td style="padding:4px 4px 4px 2px;font-size:11px;font-weight:600;text-align:right;">$${lt.toFixed(2)}</td>
+      </tr>`;
+  }).join('');
+
+  // Payment badge / 支付方式标签
+  const payBadge = isTransfer
+    ? `<span style="background:#dbeafe;color:#1e40af;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;">TRANSFER</span>`
+    : `<span style="background:#dcfce7;color:#15803d;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;">CASH</span>`;
+
+  // Footer rows / 发票页脚行
+  let footerRows = `
+    <tr>
+      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;color:#4b5563;">Sub Total</td>
+      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;font-weight:600;">$${s.subTotal.toFixed(2)}</td>
+    </tr>`;
+
+  if (s.discAmt > 0) {
+    footerRows += `
+    <tr>
+      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;color:#2563eb;">Discount ${globalDiscount}%</td>
+      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;color:#2563eb;font-weight:600;">-$${s.discAmt.toFixed(2)}</td>
+    </tr>`;
+  }
+
+  footerRows += `
+    <tr style="border-top:1px solid #e5e7eb;">
+      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;color:#4b5563;">G.S.T (10%)</td>
+      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;font-weight:600;">$${s.gst.toFixed(2)}</td>
+    </tr>
+    <tr>
+      <td colspan="4" style="text-align:right;font-size:11px;padding:3px 4px 3px 0;font-weight:700;color:#111827;">Total Inclusive G.S.T</td>
+      <td style="text-align:right;font-size:11px;padding:3px 4px 3px 2px;font-weight:700;color:#111827;">$${s.totalIncGST.toFixed(2)}</td>
+    </tr>`;
+
+  if (!isTransfer) {
+    // Cash mode: rounding adjustment + Cash Total
+    // 现金模式：取整调整 + 现金合计
+    if (s.cashRounding !== 0) {
+      const absR = Math.abs(s.cashRounding).toFixed(2);
+      const sign = s.cashRounding > 0 ? '+$' : '-$';
+      footerRows += `
+      <tr>
+        <td colspan="4" style="text-align:right;font-size:10px;padding:3px 4px 3px 0;color:#9ca3af;">Cash Rounding</td>
+        <td style="text-align:right;font-size:10px;padding:3px 4px 3px 2px;color:#9ca3af;">${sign}${absR}</td>
+      </tr>`;
+    }
+    footerRows += `
+    <tr style="border-top:2px solid #111827;">
+      <td colspan="4" style="text-align:right;font-size:14px;padding:5px 4px 2px 0;font-weight:700;">Cash Total</td>
+      <td style="text-align:right;font-size:14px;padding:5px 4px 2px 2px;font-weight:700;">$${s.cashTotal.toFixed(2)}</td>
+    </tr>`;
+  }
+
+  return `
+    <div style="border:1px solid #d1d5db;padding:16px;font-family:'Courier New',monospace;">
+
+      <!-- Invoice header / 发票头部 -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Original</div>
+          <div style="font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;line-height:1.2;">
+            Tax Invoice / Statement
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:9px;color:#9ca3af;">Invoice #</div>
+          <div style="font-size:12px;font-weight:700;">${invNum}</div>
+          <div style="font-size:9px;color:#9ca3af;margin-top:2px;">Date: ${dateStr}</div>
+        </div>
+      </div>
+
+      <!-- Payment badge / 支付标签 -->
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        ${payBadge}
+      </div>
+
+      <!-- Line items table / 产品明细表 -->
+      <table style="width:100%;border-collapse:collapse;border:1px solid #d1d5db;margin-bottom:10px;">
+        <thead>
+          <tr style="background:#f9fafb;border-bottom:1px solid #d1d5db;">
+            <th style="font-size:9px;padding:5px 2px 5px 4px;text-align:right;width:22px;font-weight:600;color:#6b7280;">No.</th>
+            <th style="font-size:9px;padding:5px 2px;text-align:center;width:36px;font-weight:600;color:#6b7280;">QTY</th>
+            <th style="font-size:9px;padding:5px 4px;text-align:left;font-weight:600;color:#6b7280;">Description</th>
+            <th style="font-size:9px;padding:5px 2px;text-align:center;width:44px;font-weight:600;color:#6b7280;">Disc.</th>
+            <th style="font-size:9px;padding:5px 4px 5px 2px;text-align:right;width:56px;font-weight:600;color:#6b7280;">Total $</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+
+      <!-- Footer totals / 页脚合计 -->
+      <table style="width:100%;border-collapse:collapse;">
+        <colgroup>
+          <col style="width:22px"><col style="width:36px">
+          <col><col style="width:44px"><col style="width:56px">
+        </colgroup>
+        <tbody>${footerRows}</tbody>
+      </table>
+
+    </div>`;
+}
+
+
+// ============================================================
+// 10. INVOICE GENERATION & ACTIONS / 发票生成与操作
+// ============================================================
+let _currentInvoiceData = null;
+
+function generateInvoice() {
+  if (cart.length === 0) { alert('Cart is empty!'); return; }
+
+  const invNum  = getInvNum();
+  const d       = new Date();
+  const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const s       = calcSummary();
+  const html    = buildInvoiceHTML(invNum, dateStr, s);
+
+  document.getElementById('invoice-content').innerHTML = html;
+  document.getElementById('invoice-modal').classList.remove('hidden');
+
+  _currentInvoiceData = {
+    invNum, dateStr,
+    cart: JSON.parse(JSON.stringify(cart)),
+    globalDiscount, isTransfer, summary: s, html,
+  };
+}
+
+function saveAndClose() {
+  if (!_currentInvoiceData) return;
+  saveInvoiceToDB(_currentInvoiceData, () => {
+    alert(`Saved: ${_currentInvoiceData.invNum}`);
+    closeModal();
+  });
+}
+
+function closeModal() {
+  document.getElementById('invoice-modal').classList.add('hidden');
+}
+
+function printInvoice() {
+  const html = document.getElementById('invoice-content').innerHTML;
+  const w = window.open('', '_blank', 'width=600,height=800');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      body { margin: 20px; font-family: 'Courier New', monospace; }
+      @media print { body { margin: 0; } }
+    </style></head>
+    <body>${html}
+    <script>window.onload = function(){ window.print(); setTimeout(window.close, 800); };<\/script>
+    </body></html>`);
+  w.document.close();
+}
+
+
+// ============================================================
+// 11. INDEXEDDB — INVOICE HISTORY / 历史发票（IndexedDB）
+// ============================================================
+let db = null;
+
+function initDB(cb) {
+  const req = indexedDB.open('SalesCalcDB', 1);
+  req.onupgradeneeded = e => {
+    const d = e.target.result;
+    if (!d.objectStoreNames.contains('invoices')) {
+      d.createObjectStore('invoices', { keyPath: 'invNum' });
+    }
+  };
+  req.onsuccess = e => { db = e.target.result; if (cb) cb(); };
+  req.onerror   = ()  => console.warn('IndexedDB unavailable');
+}
+
+function saveInvoiceToDB(data, cb) {
+  if (!db) return;
+  const tx = db.transaction('invoices', 'readwrite');
+  tx.objectStore('invoices').put(data);
+  tx.oncomplete = cb;
+}
+
+function openHistory() {
+  document.getElementById('history-modal').classList.remove('hidden');
+  renderHistory();
+}
+
+function closeHistory() {
+  document.getElementById('history-modal').classList.add('hidden');
+}
+
+function renderHistory() {
+  if (!db) return;
+  const el  = document.getElementById('history-list');
+  const tx  = db.transaction('invoices', 'readonly');
+  const req = tx.objectStore('invoices').getAll();
+
+  req.onsuccess = e => {
+    const list = e.target.result.reverse();
+    if (!list.length) {
+      el.innerHTML = `<p class="text-center text-gray-300 text-sm py-12">No saved invoices</p>`;
+      return;
+    }
+    el.innerHTML = list.map(inv => {
+      const total = inv.isTransfer
+        ? inv.summary.totalIncGST.toFixed(2)
+        : inv.summary.cashTotal.toFixed(2);
+      const modeBadge = inv.isTransfer
+        ? `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`
+        : `<span class="text-xs text-green-600 font-semibold">Cash</span>`;
+      return `
+        <div class="flex items-center px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
+             onclick="viewSavedInvoice('${inv.invNum}')">
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-mono font-bold text-gray-800 truncate">${inv.invNum}</div>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span class="text-xs text-gray-400">${inv.dateStr}</span>
+              ${modeBadge}
+            </div>
+          </div>
+          <div class="text-base font-bold text-gray-700 ml-2">$${total}</div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300 ml-1"></i>
+        </div>`;
+    }).join('');
+    lucide.createIcons();
+  };
+}
+
+function viewSavedInvoice(invNum) {
+  if (!db) return;
+  const tx  = db.transaction('invoices', 'readonly');
+  const req = tx.objectStore('invoices').get(invNum);
+  req.onsuccess = e => {
+    const inv = e.target.result;
+    if (!inv) return;
+    document.getElementById('invoice-content').innerHTML = inv.html;
+    _currentInvoiceData = inv;
+    closeHistory();
+    document.getElementById('invoice-modal').classList.remove('hidden');
+  };
+}
+
+
+// ============================================================
+// 12. LOCALSTORAGE — CART PERSISTENCE / 购物车持久化（localStorage）
+// ============================================================
+function persistCart() {
+  localStorage.setItem('cart_v1', JSON.stringify({ cart, globalDiscount, isTransfer }));
+}
+
+function loadCart() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('cart_v1'));
+    if (!saved) return;
+    // Re-link product objects by shortcode / 通过快捷码重新关联产品对象
+    cart = (saved.cart || []).map(item => {
+      const product = PRODUCTS.find(p => p.shorts === item.product.shorts);
+      return product ? { product, qty: item.qty } : null;
+    }).filter(Boolean);
+    globalDiscount = saved.globalDiscount || 0;
+    isTransfer     = !!saved.isTransfer;
+  } catch { /* ignore corrupt data / 忽略损坏数据 */ }
+}
+
+function loadStore() {
+  const s = localStorage.getItem('storeInitial') || '';
+  document.getElementById('store-input').value = s;
+  document.getElementById('inv-num-display').textContent = getInvNum();
+}
+
+
+// ============================================================
+// 13. SERVICE WORKER (PWA OFFLINE) / 离线服务工作者
+//     Caches CDN assets for offline use / 缓存CDN资源以供离线使用
+// ============================================================
+(function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  const swCode = `
+    const CACHE = 'msc-v1';
+    const CDN = [
+      'https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css',
+      'https://unpkg.com/lucide@0.284.0/dist/umd/lucide.min.js'
+    ];
+    self.addEventListener('install', e =>
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(CDN)))
+    );
+    self.addEventListener('fetch', e =>
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)))
+    );
+  `;
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+})();
+
+
+// ============================================================
+// 14. INIT / 初始化
+// ============================================================
+document.getElementById('cmd-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addItem(); }
+});
+
+// Boot sequence / 启动序列
+initDB(() => {
+  loadCart();
+  loadStore();
+  renderAll();
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>
