@@ -360,9 +360,14 @@ function calcSummary(items) {
   let subTotal       = 0; // Sum of qty × price before ANY discount (exchange = $0)
   let totalAfterDisc = 0; // Sum of after-discount line totals (exchange = $0)
 
+  let catADiscAmt = 0; // Cat A (P/J/N) seaweed 10% off amount / 海苔10%折扣金额
+
   items.forEach(({ product, qty, isExchange }) => {
     subTotal       += lineSub(product, qty, isExchange);
     totalAfterDisc += lineAfterDisc(product, qty, isExchange);
+    if (!isExchange && CAT_A.has(product.shorts)) {
+      catADiscAmt += product.price * qty * 0.1;
+    }
   });
 
   // discAmt covers Cat A 10% + Cat B global discount combined
@@ -377,7 +382,7 @@ function calcSummary(items) {
     cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, totalAfterDisc, cashRounding, cashTotal };
+  return { subTotal, discAmt, catADiscAmt, totalAfterDisc, cashRounding, cashTotal };
 }
 
 
@@ -537,6 +542,11 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
       ? `Discount (incl. ${globalDiscount}%)`
       : `Discount`;
     footerRows += fRow(discLabel, `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
+  }
+
+  // Seaweed 10% breakdown line / 海苔10%折扣明细
+  if (s.catADiscAmt > 0) {
+    footerRows += fRow('↳ Seaweed 10% Off', `-$${s.catADiscAmt.toFixed(2)}`, '13px', '#ea580c');
   }
 
   if (!isTransfer) {
