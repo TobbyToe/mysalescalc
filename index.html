@@ -248,30 +248,38 @@ let isTransfer     = false; // false = Cash (default) | true = Transfer
 
 // ============================================================
 // 3. COMMAND PARSING / 快捷码解析
-//    Format: [ShortCode][Quantity][Unit?]
-//    Spaces are stripped first, so "v 1 box" → "v1box"
-//    空格会被去除，所以 "v 1 box" 等同于 "v1box"
+//    Format: [ex?][ShortCode][Quantity][Unit?]
+//    "ex" prefix = exchange item (shows $0 on invoice)
+//    "ex" 前缀 = 换货（发票显示 $0）
+//    Spaces stripped: "ex c 10" → "exc10"
 // ============================================================
 function parseCommand(raw) {
-  // Strip all whitespace / 去除所有空格
   const cmd = raw.trim().toLowerCase().replace(/\s+/g, '');
   if (!cmd) return { error: 'empty' };
 
+  // Detect exchange prefix / 检测换货前缀
+  let isExchange = false;
+  let lookup     = cmd;
+  if (cmd.startsWith('ex') && cmd.length > 2) {
+    isExchange = true;
+    lookup     = cmd.slice(2);
+  }
+
   for (const product of SORTED_PRODUCTS) {
     const sc = product.shorts.toLowerCase();
-    if (!cmd.startsWith(sc)) continue;
+    if (!lookup.startsWith(sc)) continue;
 
-    const rest = cmd.slice(sc.length);
+    const rest = lookup.slice(sc.length);
     if (!rest) return { error: `Missing qty after "${product.shorts}"` };
 
     const boxM = rest.match(/^(\d+)box$/);
     const eaM  = rest.match(/^(\d+)(ea)?$/);
 
-    if (boxM) return { product, qty: parseInt(boxM[1], 10) * product.eaBox };
+    if (boxM) return { product, qty: parseInt(boxM[1], 10) * product.eaBox, isExchange };
     if (eaM)  {
       const qty = parseInt(eaM[1], 10);
       if (qty <= 0) return { error: 'Qty must be > 0' };
-      return { product, qty };
+      return { product, qty, isExchange };
     }
   }
 
@@ -306,10 +314,12 @@ function parseTextarea() {
       if (result.error !== 'empty') errors.push({ line: lines[i], msg: result.error });
       continue;
     }
-    // Merge duplicates / 合并重复产品
-    const existing = items.find(it => it.product.shorts === result.product.shorts);
+    // Merge same product + same exchange flag / 合并相同产品且换货标志相同的行
+    const existing = items.find(it =>
+      it.product.shorts === result.product.shorts && it.isExchange === result.isExchange
+    );
     if (existing) existing.qty += result.qty;
-    else items.push({ product: result.product, qty: result.qty });
+    else items.push({ product: result.product, qty: result.qty, isExchange: result.isExchange });
   }
 
   return { storeName, items, errors };
@@ -319,12 +329,27 @@ function parseTextarea() {
 // ============================================================
 // 5. CALCULATIONS / 金额计算 (prices are GST-inclusive / 含GST定价)
 // ============================================================
-function lineTotal(product, qty) {
-  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9;
+
+// Line subtotal: qty × unit price, NO discount. Exchange items = $0.
+// 行小计：数量 × 单价，不含折扣。换货项 = $0
+function lineSub(product, qty, isExchange) {
+  if (isExchange) return 0;
   return product.price * qty;
 }
 
-function discLabel(product) {
+// Line total after discounts. Exchange items = $0.
+// 行折后合计。换货项 = $0
+function lineAfterDisc(product, qty, isExchange) {
+  if (isExchange) return 0;
+  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9;
+  if (product.shorts !== 'Salt' && globalDiscount > 0) return product.price * qty * (1 - globalDiscount / 100);
+  return product.price * qty;
+}
+
+// Discount column label. Exchange = "-"
+// 折扣列标签。换货 = "-"
+function discLabel(product, isExchange) {
+  if (isExchange)                return '-';
   if (CAT_A.has(product.shorts)) return '10%';
   if (product.shorts === 'Salt') return 'Special';
   if (globalDiscount > 0)        return `${globalDiscount}%`;
@@ -332,28 +357,27 @@ function discLabel(product) {
 }
 
 function calcSummary(items) {
-  let subTotal  = 0;
-  let catBTotal = 0;
+  let subTotal       = 0; // Sum of qty × price before ANY discount (exchange = $0)
+  let totalAfterDisc = 0; // Sum of after-discount line totals (exchange = $0)
 
-  items.forEach(({ product, qty }) => {
-    const lt = lineTotal(product, qty);
-    subTotal += lt;
-    if (!CAT_A.has(product.shorts) && product.shorts !== 'Salt') catBTotal += lt;
+  items.forEach(({ product, qty, isExchange }) => {
+    subTotal       += lineSub(product, qty, isExchange);
+    totalAfterDisc += lineAfterDisc(product, qty, isExchange);
   });
 
-  const discAmt  = catBTotal * (globalDiscount / 100);
-  const afterDisc = subTotal - discAmt;
+  // discAmt covers Cat A 10% + Cat B global discount combined
+  // 折扣总额 = Cat A 10% + Cat B 全局折扣 合并计算
+  const discAmt = subTotal - totalAfterDisc;
 
   // Australian cash rounding (nearest $0.05) / 澳洲现金取整（最近5分）
-  // Only when Transfer is OFF (Cash mode) / 仅限现金模式
   let cashRounding = 0;
-  let cashTotal    = afterDisc;
+  let cashTotal    = totalAfterDisc;
   if (!isTransfer) {
-    cashTotal    = Math.round(afterDisc * 20) / 20;
-    cashRounding = parseFloat((cashTotal - afterDisc).toFixed(2));
+    cashTotal    = Math.round(totalAfterDisc * 20) / 20;
+    cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, afterDisc, cashRounding, cashTotal };
+  return { subTotal, discAmt, totalAfterDisc, cashRounding, cashTotal };
 }
 
 
@@ -448,29 +472,47 @@ function getInvNum(storeName) {
 
 // ============================================================
 // 9. INVOICE HTML BUILDER / 发票HTML构建
-//    Font: Arial bold, large sizes for mobile screenshot
-//    字体：Arial加粗，大尺寸适配手机截图
-//    Prices are GST-inclusive — no separate GST line
-//    价格含GST — 不单独显示GST行
+//    Columns: # | QTY | Description | Unit $ | Sub $ | Disc | Total $
+//    列：序号 | 数量 | 产品 | 单价 | 小计(折前) | 折扣 | 合计(折后)
+//    Font: Arial bold / 字体：Arial 加粗
+//    Prices are GST-inclusive — no separate GST line / 含GST，不单独显示
 // ============================================================
-function buildInvoiceHTML(invNum, dateStr, items, s) {
-  // Base font style applied to every cell / 每个单元格的基础字体样式
+function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
   const F = 'font-family:Arial,Helvetica,sans-serif;font-weight:700;';
 
-  const itemRows = items.map(({ product, qty }, i) => {
-    const lt = lineTotal(product, qty);
-    const dl = discLabel(product);
-    const discColor =
-      CAT_A.has(product.shorts) ? '#ea580c' :
-      product.shorts === 'Salt' ? '#9333ea' :
-      dl                        ? '#2563eb' : '#9ca3af';
+  const itemRows = items.map(({ product, qty, isExchange }, i) => {
+    const sub = lineSub(product, qty, isExchange);
+    const tot = lineAfterDisc(product, qty, isExchange);
+    const dl  = discLabel(product, isExchange);
+
+    // Exchange: grey italic row, $0 amounts / 换货行：灰色斜体，金额$0
+    const rowStyle = isExchange ? 'opacity:0.75;' : '';
+    const descCell = isExchange
+      ? `[EX] ${product.name}`
+      : product.name;
+
+    const discColor = isExchange          ? '#9ca3af' :
+      CAT_A.has(product.shorts)           ? '#ea580c' :
+      product.shorts === 'Salt'           ? '#9333ea' :
+      dl                                  ? '#2563eb' : '#9ca3af';
+
+    // Highlight total cell when discounted / 有折扣时高亮合计列
+    const totStyle = (!isExchange && sub !== tot) ? 'background:#fef9c3;' : '';
+
+    // Unit price: always show real price so value is visible / 单价始终显示真实价格
+    const unitDisplay = `$${product.price.toFixed(2)}`;
+    const subDisplay  = isExchange ? '$0.00' : `$${sub.toFixed(2)}`;
+    const totDisplay  = isExchange ? '$0.00' : `$${tot.toFixed(2)}`;
+
     return `
-      <tr style="border-bottom:1px solid #e5e7eb;">
-        <td style="${F}font-size:14px;color:#9ca3af;padding:8px 4px 8px 6px;text-align:right;">${i + 1}</td>
-        <td style="${F}font-size:16px;padding:8px 4px;text-align:center;">${qty}</td>
-        <td style="${F}font-size:15px;padding:8px 6px;line-height:1.3;">${product.name}</td>
-        <td style="${F}font-size:15px;padding:8px 4px;text-align:center;color:${discColor};">${dl}</td>
-        <td style="${F}font-size:16px;padding:8px 6px 8px 4px;text-align:right;">$${lt.toFixed(2)}</td>
+      <tr style="border-bottom:1px solid #e5e7eb;${rowStyle}">
+        <td style="${F}font-size:12px;color:#9ca3af;padding:7px 3px 7px 5px;text-align:right;">${i + 1}</td>
+        <td style="${F}font-size:15px;padding:7px 3px;text-align:center;">${qty}</td>
+        <td style="${F}font-size:13px;padding:7px 5px;line-height:1.3;">${descCell}</td>
+        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#374151;">${unitDisplay}</td>
+        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#374151;">${subDisplay}</td>
+        <td style="${F}font-size:13px;padding:7px 3px;text-align:center;color:${discColor};">${dl}</td>
+        <td style="${F}font-size:14px;padding:7px 5px 7px 3px;text-align:right;${totStyle}">${totDisplay}</td>
       </tr>`;
   }).join('');
 
@@ -479,70 +521,81 @@ function buildInvoiceHTML(invNum, dateStr, items, s) {
     ? `<span style="${F}font-size:13px;background:#dbeafe;color:#1e40af;padding:4px 14px;border-radius:999px;">TRANSFER</span>`
     : `<span style="${F}font-size:13px;background:#dcfce7;color:#15803d;padding:4px 14px;border-radius:999px;">CASH</span>`;
 
-  // Footer / 页脚（无GST行）
+  // Footer row builder (spans all 7 columns) / 页脚行构建（跨7列）
   const fRow = (label, value, size = '16px', color = '#111827', borderTop = false) => `
     <tr style="${borderTop ? 'border-top:2px solid #111827;' : ''}">
-      <td colspan="4" style="${F}font-size:${size};padding:7px 6px 7px 0;text-align:right;color:${color};">${label}</td>
-      <td style="${F}font-size:${size};padding:7px 6px;text-align:right;color:${color};">${value}</td>
+      <td colspan="6" style="${F}font-size:${size};padding:7px 4px 7px 0;text-align:right;color:${color};">${label}</td>
+      <td style="${F}font-size:${size};padding:7px 5px;text-align:right;color:${color};">${value}</td>
     </tr>`;
 
+  // Sub Total = all lines pre-discount / 小计 = 所有行打折前总和
   let footerRows = fRow('Sub Total', `$${s.subTotal.toFixed(2)}`);
 
+  // Combined discount: Cat A 10% + Cat B global% / 合并折扣：含海苔10%
   if (s.discAmt > 0) {
-    footerRows += fRow(`Discount ${globalDiscount}%`, `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
+    const discLabel = globalDiscount > 0
+      ? `Discount (incl. ${globalDiscount}%)`
+      : `Discount`;
+    footerRows += fRow(discLabel, `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
   }
 
   if (!isTransfer) {
     if (s.cashRounding !== 0) {
       const absR = Math.abs(s.cashRounding).toFixed(2);
       const sign = s.cashRounding > 0 ? '+$' : '-$';
-      footerRows += fRow('Cash Rounding', `${sign}${absR}`, '14px', '#9ca3af');
+      footerRows += fRow('Cash Rounding', `${sign}${absR}`, '13px', '#9ca3af');
     }
     footerRows += fRow('Cash Total', `$${s.cashTotal.toFixed(2)}`, '22px', '#111827', true);
   } else {
-    footerRows += fRow('Total', `$${s.afterDisc.toFixed(2)}`, '22px', '#111827', true);
+    footerRows += fRow('Total', `$${s.totalAfterDisc.toFixed(2)}`, '22px', '#111827', true);
   }
 
   return `
     <div style="${F}background:#fff;border:1.5px solid #d1d5db;border-radius:8px;overflow:hidden;">
 
       <!-- Header / 发票头部 -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:16px 16px 10px;">
-        <div>
-          <div style="${F}font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;">Original</div>
-          <div style="${F}font-size:20px;text-transform:uppercase;line-height:1.2;margin-top:2px;">
-            Tax Invoice
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:16px 16px 12px;">
+        <!-- Left: company + recipient / 左：公司信息与收件方 -->
+        <div style="flex:1;min-width:0;padding-right:12px;">
+          <div style="${F}font-size:20px;text-transform:uppercase;line-height:1.2;">Tax Invoice</div>
+          <div style="margin-top:10px;">
+            <div style="${F}font-size:13px;color:#374151;">From: Korean Foods P/L</div>
+            <div style="${F}font-size:12px;color:#6b7280;margin-top:2px;">ABN 65 122 947 586</div>
           </div>
-          <div style="${F}font-size:13px;color:#6b7280;margin-top:1px;">/ Statement</div>
+          <div style="margin-top:8px;">
+            <div style="${F}font-size:12px;color:#9ca3af;">To:</div>
+            <div style="${F}font-size:16px;color:#111827;text-decoration:underline;margin-top:1px;">${storeName}</div>
+          </div>
         </div>
-        <div style="text-align:right;">
+        <!-- Right: invoice # + date + badge / 右：发票号、日期、支付标签 -->
+        <div style="text-align:right;flex-shrink:0;">
           <div style="${F}font-size:11px;color:#9ca3af;">Invoice #</div>
-          <div style="${F}font-size:16px;color:#111827;letter-spacing:0.03em;">${invNum}</div>
-          <div style="${F}font-size:13px;color:#6b7280;margin-top:4px;">Date: ${dateStr}</div>
+          <div style="${F}font-size:14px;color:#111827;letter-spacing:0.02em;">${invNum}</div>
+          <div style="${F}font-size:12px;color:#6b7280;margin-top:4px;">Date: ${dateStr}</div>
           <div style="margin-top:8px;">${payBadge}</div>
         </div>
       </div>
 
-      <!-- Line items table / 产品明细表 -->
+      <!-- Line items table: # QTY Description Unit$ Sub$ Disc Total$ -->
+      <!-- 产品明细：序号 数量 产品名 单价 小计 折扣 合计 -->
       <table style="width:100%;border-collapse:collapse;border-top:1.5px solid #d1d5db;">
         <thead>
           <tr style="background:#f3f4f6;border-bottom:1.5px solid #d1d5db;">
-            <th style="${F}font-size:12px;color:#6b7280;padding:8px 4px 8px 6px;text-align:right;width:28px;">#</th>
-            <th style="${F}font-size:12px;color:#6b7280;padding:8px 4px;text-align:center;width:44px;">QTY</th>
-            <th style="${F}font-size:12px;color:#6b7280;padding:8px 6px;text-align:left;">Description</th>
-            <th style="${F}font-size:12px;color:#6b7280;padding:8px 4px;text-align:center;width:50px;">Disc.</th>
-            <th style="${F}font-size:12px;color:#6b7280;padding:8px 6px 8px 4px;text-align:right;width:70px;">Total $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px 7px 5px;text-align:right;width:24px;">#</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:38px;">QTY</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px;text-align:left;">Description</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:52px;">Unit $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:58px;">Sub $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:42px;">Disc</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px 7px 3px;text-align:right;width:62px;">Total $</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
 
-      <!-- Footer totals / 页脚合计 -->
-      <div style="border-top:1.5px solid #e5e7eb;padding:4px 16px 16px;">
+      <!-- Footer / 页脚 -->
+      <div style="border-top:1.5px solid #e5e7eb;padding:4px 14px 16px;">
         <table style="width:100%;border-collapse:collapse;">
-          <colgroup>
-            <col><col style="width:28px"><col style="width:44px"><col style="width:50px"><col style="width:76px">
-          </colgroup>
           <tbody>${footerRows}</tbody>
         </table>
       </div>
@@ -570,7 +623,7 @@ function generateInvoice() {
   const d       = new Date();
   const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   const s       = calcSummary(items);
-  const html    = buildInvoiceHTML(invNum, dateStr, items, s);
+  const html    = buildInvoiceHTML(invNum, dateStr, storeName, items, s);
 
   // Show parse warnings above invoice if any / 显示解析警告
   let warningHtml = '';
@@ -666,7 +719,7 @@ function renderHistory() {
     }
     el.innerHTML = list.map(inv => {
       const total = (inv.isTransfer
-        ? inv.summary.afterDisc
+        ? inv.summary.totalAfterDisc
         : inv.summary.cashTotal).toFixed(2);
       const badge = inv.isTransfer
         ? `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`
