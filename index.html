@@ -225,6 +225,10 @@ const PRODUCTS = [
   { no:53, shorts:'VS',   name:'bibigo Vegan Sliced Kimchi 400g',    price:6.90,  eaBox:6  },
   { no:54, shorts:'M',    name:'bibigo Sliced Kimchi 900g',          price:7.50,  eaBox:8  },
   { no:55, shorts:'B',    name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
+  { no:56, shorts:'0.5lb',name:'Chilli Powder 227g',                price:3.15,  eaBox:65 },
+  { no:57, shorts:'1lb',  name:'Chilli Powder 454g',                price:5.40,  eaBox:36 },
+  { no:58, shorts:'2lb',  name:'Chilli Powder 908g',                price:10.45, eaBox:18 },
+  { no:59, shorts:'5lb',  name:'Chilli Powder 2.27kg',              price:24.75, eaBox:8  },
 ];
 
 // Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
@@ -425,12 +429,20 @@ function clearAll() {
 // ============================================================
 // 8. INVOICE NUMBER / 发票号
 // ============================================================
+
+// Normalize store name: uppercase + strip everything except A-Z 0-9
+// 店名标准化：大写 + 去掉字母数字以外的所有字符（空格、& 等）
+// e.g. "d&k" → "DK",  "D & K" → "DK",  "tk" → "TK"
+function normalizeStore(name) {
+  return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 function getInvNum(storeName) {
   const d  = new Date();
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}${mm}${yy}${storeName.toUpperCase().replace(/\s+/g, '')}`;
+  return `${dd}${mm}${yy}${normalizeStore(storeName)}`;
 }
 
 
