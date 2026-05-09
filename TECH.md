@@ -5,6 +5,34 @@
 
 ---
 
+## Changelog / 版本记录
+
+### v2.0 — Van Sales Module / 车销管理模块 (2026-05-09)
+**New features / 新功能：**
+- Added **Van Sales tab** (bottom navigation: Sales | Van)
+- **Morning Load-In**: record daily stock taken out, stored in `localStorage` keyed by date
+- **Real-time inventory deduction**: sold quantities calculated from today's saved invoices
+- **Evening settlement**: sales totals grouped by T·Cash / E·Transfer / Q·Cheque
+- **Day Summary**: one-tap text export (copy to clipboard) for boss/front desk
+- **Clear Day**: wipes today's load-in only, invoice history preserved
+
+**Changed / 修改：**
+- Payment type changed from binary toggle (`isTransfer: boolean`) to 3-way enum (`paymentType: 'cash' | 'transfer' | 'cheque'`) — Cheque support added
+- Invoice badge now shows CASH / TRANSFER / CHEQUE with distinct colors
+- Cash rounding now triggered by `paymentType === 'cash'` instead of `!isTransfer`
+- localStorage key `transfer_v2` → `payType_v2` (backward-compatible migration on load)
+
+**Backward compatibility / 向后兼容：**
+- Old invoices stored with `isTransfer: true/false` are automatically read via `getInvPayType(inv)` helper
+
+### v1.0 — Initial release / 初始发布 (2026-04)
+- Single-file offline PWA invoice generator
+- GST-inclusive pricing, Cash/Transfer, Cat A/B discounts, IndexedDB history
+
+---
+
+---
+
 ## 1. Project Overview / 项目概述
 
 **My Sales Calc** is an offline-capable single-file Progressive Web App (PWA) for generating GST-inclusive tax invoices for an Australian Korean food wholesale business.

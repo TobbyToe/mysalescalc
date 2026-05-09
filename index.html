@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <!-- 移动端视口 / Mobile viewport -->
+  <!-- Mobile viewport / 移动端视口 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -18,14 +18,12 @@
     /* Prevent iOS auto-zoom / 防止 iOS 输入框自动缩放 */
     textarea, input { font-size: 16px !important; }
 
-    /* Textarea monospace with line-height for readability / 等宽字体便于输入 */
+    /* Textarea monospace / 等宽字体 */
     #order-input {
       font-family: 'Courier New', Courier, monospace;
       line-height: 1.7;
       caret-color: #2563eb;
     }
-
-    /* First line highlight via gradient / 首行高亮（店名行） */
     #order-input::placeholder { color: #d1d5db; }
 
     .btn-press:active { transform: scale(0.96); }
@@ -39,9 +37,10 @@
 <body class="bg-gray-50 min-h-screen">
 
 <!-- ============================================================ -->
-<!-- MAIN APP / 主界面                                             -->
+<!-- SALES PAGE / 销售计算器                                         -->
+<!-- v1: original invoice calculator                              -->
 <!-- ============================================================ -->
-<div class="max-w-lg mx-auto px-3 py-4 pb-16">
+<div id="sales-page" class="max-w-lg mx-auto px-3 py-4 pb-24">
 
   <!-- Top bar / 顶部栏 -->
   <div class="flex items-center justify-between mb-3">
@@ -54,8 +53,6 @@
 
   <!-- Order textarea card / 订单输入卡片 -->
   <div class="bg-white rounded-2xl shadow-sm px-4 pt-3 pb-2 mb-1">
-
-    <!-- Label row / 标签行 -->
     <div class="flex items-center justify-between mb-1.5">
       <div class="flex items-center gap-2 text-xs text-gray-400">
         <span class="bg-blue-100 text-blue-600 font-bold px-1.5 py-0.5 rounded text-xs">Line 1</span>
@@ -64,29 +61,26 @@
         <span class="bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded text-xs">Line 2+</span>
         <span>Products</span>
       </div>
-      <!-- Live invoice number / 实时发票号 -->
       <span id="inv-num-display" class="text-xs font-mono text-gray-400 truncate max-w-xs"></span>
     </div>
 
-    <!-- Multi-line textarea / 多行输入框 -->
     <textarea id="order-input" rows="8"
       placeholder="TK&#10;c10&#10;wc 25&#10;rkc 1&#10;v 1 box&#10;j 2 box"
       class="w-full border border-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none bg-gray-50"
       oninput="onTextareaInput()"></textarea>
 
-    <!-- Parse preview / 解析预览（错误提示） -->
     <div id="parse-errors" class="mt-1.5 hidden"></div>
   </div>
 
-  <!-- Inline hint / 内联提示 -->
   <p class="text-xs text-gray-400 px-1 mb-3">
     Spaces OK — <code class="bg-gray-100 px-1 rounded">v 1 box</code> = <code class="bg-gray-100 px-1 rounded">v1box</code>
   </p>
 
-  <!-- Discount & payment controls / 折扣与支付控制 -->
+  <!-- Discount & Payment controls / 折扣与支付控制 -->
   <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
-    <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-gray-400 font-medium">Discount:</span>
+    <!-- Discount row / 折扣行 -->
+    <div class="flex items-center gap-2 mb-2.5">
+      <span class="text-xs text-gray-400 font-medium w-16 shrink-0">Discount:</span>
       <button id="btn-disc-2" onclick="setDiscount(2)"
         class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
         2% Off
@@ -95,11 +89,21 @@
         class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
         4% Off
       </button>
-      <div class="flex-1"></div>
-      <!-- Transfer: default OFF (=Cash) / 默认关闭=现金 -->
-      <button id="btn-transfer" onclick="toggleTransfer()"
+    </div>
+    <!-- Payment row / 支付方式行 (Cash default active) -->
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-gray-400 font-medium w-16 shrink-0">Pay:</span>
+      <button id="btn-pay-cash" onclick="setPayment('cash')"
+        class="px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors bg-green-600 text-white border-green-600">
+        Cash
+      </button>
+      <button id="btn-pay-transfer" onclick="setPayment('transfer')"
         class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
         Transfer
+      </button>
+      <button id="btn-pay-cheque" onclick="setPayment('cheque')"
+        class="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 bg-white btn-press transition-colors">
+        Cheque
       </button>
     </div>
   </div>
@@ -121,12 +125,87 @@
 
 
 <!-- ============================================================ -->
-<!-- INVOICE MODAL / 发票预览（全屏，便于截图）                      -->
+<!-- VAN SALES PAGE / 车销管理                                       -->
+<!-- v2: morning load-in, settlement, inventory                   -->
+<!-- ============================================================ -->
+<div id="van-page" class="hidden max-w-lg mx-auto px-3 py-4 pb-24">
+
+  <!-- Header / 标题行 -->
+  <div class="flex items-center justify-between mb-3">
+    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Van Sales</h1>
+    <span id="van-date" class="text-xs font-mono text-gray-400"></span>
+  </div>
+
+  <!-- Morning Load-In / 出货录入 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="font-bold text-gray-700 text-sm">Morning Load-In / 出货录入</h2>
+      <button id="btn-edit-load" onclick="editLoadIn()"
+        class="hidden text-xs text-blue-500 font-semibold btn-press border border-blue-200 px-2 py-1 rounded-lg">
+        ✏ Edit
+      </button>
+    </div>
+    <!-- Scrollable product list / 可滚动产品列表 -->
+    <div id="load-in-form" style="max-height:52vh;overflow-y:auto;"></div>
+    <button id="btn-save-load" onclick="saveLoadIn()"
+      class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm mt-3 btn-press">
+      ✓ Confirm Load-In
+    </button>
+  </div>
+
+  <!-- Today's Sales Summary / 今日销售汇总 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <h2 class="font-bold text-gray-700 text-sm mb-2">Today's Sales / 今日销售</h2>
+    <div id="sales-summary"></div>
+  </div>
+
+  <!-- Inventory Status / 库存余量 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <h2 class="font-bold text-gray-700 text-sm mb-2">Inventory / 库存余量</h2>
+    <div id="inventory-table"></div>
+  </div>
+
+  <!-- End of Day / 晚间结算 -->
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
+    <h2 class="font-bold text-gray-700 text-sm mb-3">End of Day / 晚间结算</h2>
+    <div class="flex gap-2">
+      <button onclick="generateSummary()"
+        class="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-bold text-sm btn-press flex items-center justify-center gap-1">
+        <i data-lucide="clipboard" class="w-4 h-4"></i> Summary
+      </button>
+      <button onclick="clearDay()"
+        class="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold text-sm btn-press flex items-center justify-center gap-1">
+        <i data-lucide="trash-2" class="w-4 h-4"></i> Clear Day
+      </button>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ============================================================ -->
+<!-- BOTTOM TAB NAVIGATION / 底部导航栏                             -->
+<!-- ============================================================ -->
+<nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex no-print" style="z-index:40;">
+  <button id="tab-sales" onclick="switchTab('sales')"
+    class="flex-1 py-3 flex flex-col items-center gap-0.5 text-blue-600 btn-press">
+    <i data-lucide="calculator" class="w-5 h-5"></i>
+    <span class="text-xs font-medium">Sales</span>
+  </button>
+  <button id="tab-van" onclick="switchTab('van')"
+    class="flex-1 py-3 flex flex-col items-center gap-0.5 text-gray-400 btn-press">
+    <i data-lucide="truck" class="w-5 h-5"></i>
+    <span class="text-xs font-medium">Van</span>
+  </button>
+</nav>
+
+
+<!-- ============================================================ -->
+<!-- INVOICE MODAL / 发票预览（全屏）                                 -->
 <!-- ============================================================ -->
 <div id="invoice-modal"
-  class="fixed inset-0 z-50 hidden bg-white flex flex-col">
+  class="fixed inset-0 hidden bg-white flex flex-col" style="z-index:50;">
 
-  <!-- Sticky action bar / 顶部固定操作栏 -->
   <div class="flex items-center justify-between px-4 py-3 border-b bg-white shrink-0 no-print">
     <span class="font-bold text-gray-800 text-base">Invoice</span>
     <div class="flex gap-2 items-center">
@@ -144,7 +223,6 @@
     </div>
   </div>
 
-  <!-- Full-screen scrollable invoice body / 全屏可滚动发票内容 -->
   <div class="overflow-y-auto flex-1 bg-white">
     <div id="invoice-content" class="p-3"></div>
   </div>
@@ -152,20 +230,40 @@
 
 
 <!-- ============================================================ -->
-<!-- HISTORY MODAL / 历史记录                                       -->
+<!-- HISTORY MODAL / 历史记录                                        -->
 <!-- ============================================================ -->
 <div id="history-modal"
-  class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center">
-  <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-[80vh] rounded-t-2xl">
-
+  class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center" style="z-index:50;">
+  <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-4/5 rounded-t-2xl">
     <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
       <span class="font-bold text-gray-800">Invoice History</span>
       <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
-
     <div id="history-list" class="overflow-y-auto flex-1 divide-y divide-gray-50"></div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- SUMMARY MODAL / 日结文本摘要                                    -->
+<!-- ============================================================ -->
+<div id="summary-modal"
+  class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-center justify-center px-4" style="z-index:50;">
+  <div class="bg-white w-full max-w-md rounded-2xl p-4">
+    <div class="flex items-center justify-between mb-3">
+      <span class="font-bold text-gray-800">Day Summary / 日结摘要</span>
+      <button onclick="closeSummaryModal()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <textarea id="summary-text" readonly
+      class="w-full h-56 text-xs font-mono border border-gray-100 rounded-xl p-3 resize-none bg-gray-50"></textarea>
+    <button onclick="copySummary()"
+      class="w-full mt-3 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm btn-press">
+      📋 Copy to Clipboard
+    </button>
   </div>
 </div>
 
@@ -180,84 +278,81 @@
 // 1. PRODUCT DATA / 产品数据
 // ============================================================
 const PRODUCTS = [
-  { no:1,  shorts:'WC',   name:'Wellbeing Kimchi 450g',              price:7.50,  eaBox:20 },
-  { no:2,  shorts:'W95',  name:'Wellbeing Kimchi 950g',              price:14.50, eaBox:8  },
-  { no:3,  shorts:'380',  name:'Mat Kimchi Sliced 380g',             price:6.20,  eaBox:20 },
-  { no:4,  shorts:'N',    name:'Mat Kimchi Sliced 400g',             price:6.40,  eaBox:20 },
-  { no:5,  shorts:'C',    name:'Mat Kimchi Sliced 450g',             price:6.90,  eaBox:20 },
-  { no:6,  shorts:'95',   name:'Mat Kimchi Sliced 950g',             price:13.80, eaBox:8  },
-  { no:7,  shorts:'1.5K', name:'Mat Kimchi Sliced 1.5kg',            price:18.90, eaBox:8  },
-  { no:8,  shorts:'2K',   name:'Mat Kimchi Sliced 2kg',              price:22.00, eaBox:10 },
-  { no:13, shorts:'O',    name:'Glass Jar Original 400g',            price:7.60,  eaBox:9  },
-  { no:14, shorts:'V',    name:'Glass Jar Vegan 400g',               price:7.60,  eaBox:9  },
-  { no:15, shorts:'W',    name:'Glass Jar White Kimchi 400g',        price:7.60,  eaBox:9  },
-  { no:16, shorts:'4K',   name:'Whole Cabbage Kimchi 4kg',           price:44.00, eaBox:4  },
-  { no:18, shorts:'BOC',  name:'Bossam Kimchi 450g',                 price:8.00,  eaBox:20 },
-  { no:19, shorts:'WK',   name:'White Kimchi 450g',                  price:6.90,  eaBox:20 },
-  { no:20, shorts:'RKC',  name:'Radish Kimchi 450g',                 price:6.20,  eaBox:20 },
-  { no:21, shorts:'RK2',  name:'Radish Kimchi 2kg',                  price:19.30, eaBox:10 },
-  { no:22, shorts:'RS',   name:'Radish Salad 450g',                  price:6.20,  eaBox:20 },
-  { no:23, shorts:'F',    name:'Fried Kimchi 300g',                  price:4.90,  eaBox:20 },
-  { no:24, shorts:'PR',   name:'Pickled Radish 500g',                price:4.90,  eaBox:20 },
-  { no:25, shorts:'DRS',  name:'Dried Radish (Spicy)',               price:3.80,  eaBox:50 },
-  { no:26, shorts:'BF',   name:'Seasoned Balloon Flower',            price:4.30,  eaBox:50 },
-  { no:27, shorts:'RSS',  name:'Roasted Squid (Spicy)',              price:7.90,  eaBox:50 },
-  { no:28, shorts:'SS',   name:'Seaweed Salad',                      price:3.60,  eaBox:50 },
-  { no:31, shorts:'PGS',  name:'Pickled Garlic Stem',                price:4.30,  eaBox:50 },
-  { no:32, shorts:'CG',   name:'Garlic Stem with Chilli Paste',      price:4.30,  eaBox:50 },
-  { no:33, shorts:'FG',   name:'Garlic Stem with Fishcake',          price:4.30,  eaBox:50 },
-  { no:36, shorts:'LR',   name:'Roasted Lotus Root',                 price:3.90,  eaBox:50 },
-  { no:37, shorts:'FSS',  name:'Frozen Salted Shrimp',               price:6.30,  eaBox:20 },
-  { no:39, shorts:'SSK',  name:'Sweet Sour Kimchi',                  price:4.90,  eaBox:20 },
-  { no:40, shorts:'SO',   name:'Spring Onion',                       price:7.50,  eaBox:24 },
-  { no:41, shorts:'SQ',   name:'Salted Squid',                       price:4.50,  eaBox:50 },
-  { no:42, shorts:'PG',   name:'Peeled Garlic',                      price:2.70,  eaBox:50 },
-  { no:43, shorts:'GG',   name:'Ground Garlic',                      price:3.40,  eaBox:50 },
-  { no:44, shorts:'A',    name:'Cabbage Kimchi',                     price:5.70,  eaBox:20 },
-  { no:45, shorts:'J',    name:'Jarae Roasted Seaweed',              price:70.00, eaBox:10 },
-  { no:46, shorts:'P',    name:'Parae Roasted Seaweed',              price:70.00, eaBox:10 },
-  { no:47, shorts:'Salt', name:'Premium Sea Salt 5kg',               price:19.00, eaBox:4  },
-  { no:48, shorts:'BC',   name:'Teriyaki Chicken Bun',               price:11.60, eaBox:3  },
-  { no:49, shorts:'BP',   name:'BBQ Pork Bun',                       price:11.60, eaBox:3  },
-  { no:50, shorts:'GB',   name:'Beef & Ginger Gyoza',                price:12.30, eaBox:3  },
-  { no:51, shorts:'GP',   name:'Free Range Pork Gyoza',              price:12.30, eaBox:3  },
-  { no:52, shorts:'S',    name:'bibigo Sliced Kimchi 400g',          price:5.80,  eaBox:6  },
-  { no:53, shorts:'VS',   name:'bibigo Vegan Sliced Kimchi 400g',    price:6.90,  eaBox:6  },
-  { no:54, shorts:'M',    name:'bibigo Sliced Kimchi 900g',          price:7.50,  eaBox:8  },
-  { no:55, shorts:'B',    name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
-  { no:56, shorts:'0.5lb',name:'Chilli Powder 227g',                price:3.15,  eaBox:65 },
-  { no:57, shorts:'1lb',  name:'Chilli Powder 454g',                price:5.40,  eaBox:36 },
-  { no:58, shorts:'2lb',  name:'Chilli Powder 908g',                price:10.45, eaBox:18 },
-  { no:59, shorts:'5lb',  name:'Chilli Powder 2.27kg',              price:24.75, eaBox:8  },
+  { no:1,  shorts:'WC',    name:'Wellbeing Kimchi 450g',              price:7.50,  eaBox:20 },
+  { no:2,  shorts:'W95',   name:'Wellbeing Kimchi 950g',              price:14.50, eaBox:8  },
+  { no:3,  shorts:'380',   name:'Mat Kimchi Sliced 380g',             price:6.20,  eaBox:20 },
+  { no:4,  shorts:'N',     name:'Mat Kimchi Sliced 400g',             price:6.40,  eaBox:20 },
+  { no:5,  shorts:'C',     name:'Mat Kimchi Sliced 450g',             price:6.90,  eaBox:20 },
+  { no:6,  shorts:'95',    name:'Mat Kimchi Sliced 950g',             price:13.80, eaBox:8  },
+  { no:7,  shorts:'1.5K',  name:'Mat Kimchi Sliced 1.5kg',            price:18.90, eaBox:8  },
+  { no:8,  shorts:'2K',    name:'Mat Kimchi Sliced 2kg',              price:22.00, eaBox:10 },
+  { no:13, shorts:'O',     name:'Glass Jar Original 400g',            price:7.60,  eaBox:9  },
+  { no:14, shorts:'V',     name:'Glass Jar Vegan 400g',               price:7.60,  eaBox:9  },
+  { no:15, shorts:'W',     name:'Glass Jar White Kimchi 400g',        price:7.60,  eaBox:9  },
+  { no:16, shorts:'4K',    name:'Whole Cabbage Kimchi 4kg',           price:44.00, eaBox:4  },
+  { no:18, shorts:'BOC',   name:'Bossam Kimchi 450g',                 price:8.00,  eaBox:20 },
+  { no:19, shorts:'WK',    name:'White Kimchi 450g',                  price:6.90,  eaBox:20 },
+  { no:20, shorts:'RKC',   name:'Radish Kimchi 450g',                 price:6.20,  eaBox:20 },
+  { no:21, shorts:'RK2',   name:'Radish Kimchi 2kg',                  price:19.30, eaBox:10 },
+  { no:22, shorts:'RS',    name:'Radish Salad 450g',                  price:6.20,  eaBox:20 },
+  { no:23, shorts:'F',     name:'Fried Kimchi 300g',                  price:4.90,  eaBox:20 },
+  { no:24, shorts:'PR',    name:'Pickled Radish 500g',                price:4.90,  eaBox:20 },
+  { no:25, shorts:'DRS',   name:'Dried Radish (Spicy)',               price:3.80,  eaBox:50 },
+  { no:26, shorts:'BF',    name:'Seasoned Balloon Flower',            price:4.30,  eaBox:50 },
+  { no:27, shorts:'RSS',   name:'Roasted Squid (Spicy)',              price:7.90,  eaBox:50 },
+  { no:28, shorts:'SS',    name:'Seaweed Salad',                      price:3.60,  eaBox:50 },
+  { no:31, shorts:'PGS',   name:'Pickled Garlic Stem',                price:4.30,  eaBox:50 },
+  { no:32, shorts:'CG',    name:'Garlic Stem with Chilli Paste',      price:4.30,  eaBox:50 },
+  { no:33, shorts:'FG',    name:'Garlic Stem with Fishcake',          price:4.30,  eaBox:50 },
+  { no:36, shorts:'LR',    name:'Roasted Lotus Root',                 price:3.90,  eaBox:50 },
+  { no:37, shorts:'FSS',   name:'Frozen Salted Shrimp',               price:6.30,  eaBox:20 },
+  { no:39, shorts:'SSK',   name:'Sweet Sour Kimchi',                  price:4.90,  eaBox:20 },
+  { no:40, shorts:'SO',    name:'Spring Onion',                       price:7.50,  eaBox:24 },
+  { no:41, shorts:'SQ',    name:'Salted Squid',                       price:4.50,  eaBox:50 },
+  { no:42, shorts:'PG',    name:'Peeled Garlic',                      price:2.70,  eaBox:50 },
+  { no:43, shorts:'GG',    name:'Ground Garlic',                      price:3.40,  eaBox:50 },
+  { no:44, shorts:'A',     name:'Cabbage Kimchi',                     price:5.70,  eaBox:20 },
+  { no:45, shorts:'J',     name:'Jarae Roasted Seaweed',              price:70.00, eaBox:10 },
+  { no:46, shorts:'P',     name:'Parae Roasted Seaweed',              price:70.00, eaBox:10 },
+  { no:47, shorts:'Salt',  name:'Premium Sea Salt 5kg',               price:19.00, eaBox:4  },
+  { no:48, shorts:'BC',    name:'Teriyaki Chicken Bun',               price:11.60, eaBox:3  },
+  { no:49, shorts:'BP',    name:'BBQ Pork Bun',                       price:11.60, eaBox:3  },
+  { no:50, shorts:'GB',    name:'Beef & Ginger Gyoza',                price:12.30, eaBox:3  },
+  { no:51, shorts:'GP',    name:'Free Range Pork Gyoza',              price:12.30, eaBox:3  },
+  { no:52, shorts:'S',     name:'bibigo Sliced Kimchi 400g',          price:5.80,  eaBox:6  },
+  { no:53, shorts:'VS',    name:'bibigo Vegan Sliced Kimchi 400g',    price:6.90,  eaBox:6  },
+  { no:54, shorts:'M',     name:'bibigo Sliced Kimchi 900g',          price:7.50,  eaBox:8  },
+  { no:55, shorts:'B',     name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
+  { no:56, shorts:'0.5lb', name:'Chilli Powder 227g',                 price:3.15,  eaBox:65 },
+  { no:57, shorts:'1lb',   name:'Chilli Powder 454g',                 price:5.40,  eaBox:36 },
+  { no:58, shorts:'2lb',   name:'Chilli Powder 908g',                 price:10.45, eaBox:18 },
+  { no:59, shorts:'5lb',   name:'Chilli Powder 2.27kg',               price:24.75, eaBox:8  },
 ];
 
 // Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
 const CAT_A = new Set(['P', 'J', 'N']);
 
-// Longest-match parsing: sort by shortcode length descending
-// 最长匹配解析：按快捷码长度降序
+// Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
 
 
 // ============================================================
 // 2. STATE / 应用状态
 // ============================================================
-let globalDiscount = 0; // 0 | 2 | 4
-let isTransfer     = false; // false = Cash (default) | true = Transfer
+let globalDiscount = 0;       // 0 | 2 | 4
+let paymentType    = 'cash';  // 'cash' | 'transfer' | 'cheque'
+let currentTab     = 'sales';
 
 
 // ============================================================
 // 3. COMMAND PARSING / 快捷码解析
-//    Format: [ex?][ShortCode][Quantity][Unit?]
-//    "ex" prefix = exchange item (shows $0 on invoice)
-//    "ex" 前缀 = 换货（发票显示 $0）
-//    Spaces stripped: "ex c 10" → "exc10"
+//    Format: [ex?][ShortCode][Quantity][box?]
+//    "ex" prefix = exchange item ($0 on invoice) / "ex"前缀=换货
 // ============================================================
 function parseCommand(raw) {
   const cmd = raw.trim().toLowerCase().replace(/\s+/g, '');
   if (!cmd) return { error: 'empty' };
 
-  // Detect exchange prefix / 检测换货前缀
   let isExchange = false;
   let lookup     = cmd;
   if (cmd.startsWith('ex') && cmd.length > 2) {
@@ -276,7 +371,7 @@ function parseCommand(raw) {
     const eaM  = rest.match(/^(\d+)(ea)?$/);
 
     if (boxM) return { product, qty: parseInt(boxM[1], 10) * product.eaBox, isExchange };
-    if (eaM)  {
+    if (eaM) {
       const qty = parseInt(eaM[1], 10);
       if (qty <= 0) return { error: 'Qty must be > 0' };
       return { product, qty, isExchange };
@@ -289,15 +384,12 @@ function parseCommand(raw) {
 
 // ============================================================
 // 4. TEXTAREA PARSING / 多行输入解析
-//    Line 1 → store name
-//    Lines 2+ → product commands (empty lines skipped)
-//    第一行=店名，其余行=产品指令（空行跳过）
+//    Line 1 → store name / Lines 2+ → product commands
 // ============================================================
 function parseTextarea() {
   const raw   = document.getElementById('order-input').value;
   const lines = raw.split('\n').map(l => l.trim());
 
-  // First non-empty line is store name / 第一个非空行为店名
   let storeName = '';
   let startIdx  = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -308,13 +400,12 @@ function parseTextarea() {
   const errors = [];
 
   for (let i = startIdx; i < lines.length; i++) {
-    if (!lines[i]) continue; // skip empty / 跳过空行
+    if (!lines[i]) continue;
     const result = parseCommand(lines[i]);
     if (result.error) {
       if (result.error !== 'empty') errors.push({ line: lines[i], msg: result.error });
       continue;
     }
-    // Merge same product + same exchange flag / 合并相同产品且换货标志相同的行
     const existing = items.find(it =>
       it.product.shorts === result.product.shorts && it.isExchange === result.isExchange
     );
@@ -327,18 +418,13 @@ function parseTextarea() {
 
 
 // ============================================================
-// 5. CALCULATIONS / 金额计算 (prices are GST-inclusive / 含GST定价)
+// 5. CALCULATIONS / 金额计算 (all prices GST-inclusive / 含GST)
 // ============================================================
-
-// Line subtotal: qty × unit price, NO discount. Exchange items = $0.
-// 行小计：数量 × 单价，不含折扣。换货项 = $0
 function lineSub(product, qty, isExchange) {
   if (isExchange) return 0;
   return product.price * qty;
 }
 
-// Line total after discounts. Exchange items = $0.
-// 行折后合计。换货项 = $0
 function lineAfterDisc(product, qty, isExchange) {
   if (isExchange) return 0;
   if (CAT_A.has(product.shorts)) return product.price * qty * 0.9;
@@ -346,8 +432,6 @@ function lineAfterDisc(product, qty, isExchange) {
   return product.price * qty;
 }
 
-// Discount column label. Exchange = "-"
-// 折扣列标签。换货 = "-"
 function discLabel(product, isExchange) {
   if (isExchange)                return '-';
   if (CAT_A.has(product.shorts)) return '10%';
@@ -357,11 +441,10 @@ function discLabel(product, isExchange) {
 }
 
 function calcSummary(items) {
-  let subTotal       = 0; // Sum of qty × price before ANY discount (exchange = $0)
-  let totalAfterDisc = 0; // Sum of after-discount line totals (exchange = $0)
-
-  let catADiscAmt = 0; // Cat A (P/J/N) seaweed 10% off / 海苔10%折扣金额
-  let catBDiscAmt = 0; // Cat B global 2%/4% off (excl. exchange, Cat A, Salt) / 普通产品全局折扣
+  let subTotal       = 0;
+  let totalAfterDisc = 0;
+  let catADiscAmt    = 0; // Seaweed 10% / 海苔10%折扣额
+  let catBDiscAmt    = 0; // Others global% / 普通产品全局折扣额
 
   items.forEach(({ product, qty, isExchange }) => {
     subTotal       += lineSub(product, qty, isExchange);
@@ -374,14 +457,12 @@ function calcSummary(items) {
     }
   });
 
-  // discAmt covers Cat A 10% + Cat B global discount combined
-  // 折扣总额 = Cat A 10% + Cat B 全局折扣 合并计算
   const discAmt = subTotal - totalAfterDisc;
 
-  // Australian cash rounding (nearest $0.05) / 澳洲现金取整（最近5分）
+  // Australian cash rounding (nearest $0.05), only for Cash / 澳洲现金取整，仅Cash模式
   let cashRounding = 0;
   let cashTotal    = totalAfterDisc;
-  if (!isTransfer) {
+  if (paymentType === 'cash') {
     cashTotal    = Math.round(totalAfterDisc * 20) / 20;
     cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
@@ -394,32 +475,34 @@ function calcSummary(items) {
 // 6. LIVE TEXTAREA FEEDBACK / 实时输入反馈
 // ============================================================
 function onTextareaInput() {
-  const { storeName, items, errors } = parseTextarea();
+  const { storeName, errors } = parseTextarea();
 
-  // Update invoice number display / 更新发票号显示
-  const d    = new Date();
-  const dd   = String(d.getDate()).padStart(2, '0');
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const yy   = String(d.getFullYear()).slice(-2);
-  const inv  = `${dd}${mm}${yy}${storeName.toUpperCase().replace(/\s+/g, '')}`;
+  // Live invoice number / 实时发票号
+  const d   = new Date();
+  const dd  = String(d.getDate()).padStart(2, '0');
+  const mm  = String(d.getMonth() + 1).padStart(2, '0');
+  const yy  = String(d.getFullYear()).slice(-2);
+  const inv = `${dd}${mm}${yy}${storeName.toUpperCase().replace(/\s+/g, '')}`;
   document.getElementById('inv-num-display').textContent = storeName ? inv : '';
 
-  // Show parse errors inline / 显示解析错误
+  // Parse errors / 解析错误
   const errEl = document.getElementById('parse-errors');
-  if (errors.length === 0) { errEl.classList.add('hidden'); return; }
-  errEl.classList.remove('hidden');
-  errEl.innerHTML = errors.map(e =>
-    `<div class="flex items-start gap-1 text-xs text-red-400 py-0.5">
-       <i data-lucide="alert-circle" class="w-3 h-3 mt-0.5 shrink-0"></i>
-       <span><code class="bg-red-50 px-1 rounded">${e.line}</code> — ${e.msg}</span>
-     </div>`
-  ).join('');
-  lucide.createIcons();
+  if (errors.length === 0) { errEl.classList.add('hidden'); }
+  else {
+    errEl.classList.remove('hidden');
+    errEl.innerHTML = errors.map(e =>
+      `<div class="flex items-start gap-1 text-xs text-red-400 py-0.5">
+         <i data-lucide="alert-circle" class="w-3 h-3 mt-0.5 shrink-0"></i>
+         <span><code class="bg-red-50 px-1 rounded">${e.line}</code> — ${e.msg}</span>
+       </div>`
+    ).join('');
+    lucide.createIcons();
+  }
 
-  // Persist to localStorage / 保存到localStorage
+  // Persist to localStorage / 持久化
   localStorage.setItem('orderText_v2', document.getElementById('order-input').value);
-  localStorage.setItem('disc_v2', String(globalDiscount));
-  localStorage.setItem('transfer_v2', String(isTransfer));
+  localStorage.setItem('disc_v2',      String(globalDiscount));
+  localStorage.setItem('payType_v2',   paymentType);
 }
 
 
@@ -429,29 +512,34 @@ function onTextareaInput() {
 function setDiscount(pct) {
   globalDiscount = (globalDiscount === pct) ? 0 : pct;
   renderControlButtons();
-  onTextareaInput(); // re-run to persist
+  onTextareaInput();
 }
 
-function toggleTransfer() {
-  isTransfer = !isTransfer;
+function setPayment(type) {
+  paymentType = type;
   renderControlButtons();
   onTextareaInput();
 }
 
 function renderControlButtons() {
-  const base     = 'px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors';
-  const active   = `${base} bg-blue-600 text-white border-blue-600`;
-  const inactive = `${base} border-gray-200 text-gray-600 bg-white`;
-  document.getElementById('btn-disc-2').className   = globalDiscount === 2 ? active : inactive;
-  document.getElementById('btn-disc-4').className   = globalDiscount === 4 ? active : inactive;
-  document.getElementById('btn-transfer').className = isTransfer            ? active : inactive;
+  const base    = 'px-3 py-1.5 rounded-xl text-xs font-bold border btn-press transition-colors';
+  const blue    = `${base} bg-blue-600 text-white border-blue-600`;
+  const green   = `${base} bg-green-600 text-white border-green-600`;
+  const yellow  = `${base} bg-yellow-500 text-white border-yellow-500`;
+  const off     = `${base} border-gray-200 text-gray-600 bg-white`;
+
+  document.getElementById('btn-disc-2').className     = globalDiscount === 2 ? blue   : off;
+  document.getElementById('btn-disc-4').className     = globalDiscount === 4 ? blue   : off;
+  document.getElementById('btn-pay-cash').className     = paymentType === 'cash'     ? green  : off;
+  document.getElementById('btn-pay-transfer').className = paymentType === 'transfer' ? blue   : off;
+  document.getElementById('btn-pay-cheque').className   = paymentType === 'cheque'   ? yellow : off;
 }
 
 function clearAll() {
   if (!confirm('Clear everything?')) return;
   document.getElementById('order-input').value = '';
   globalDiscount = 0;
-  isTransfer     = false;
+  paymentType    = 'cash';
   document.getElementById('inv-num-display').textContent = '';
   document.getElementById('parse-errors').classList.add('hidden');
   renderControlButtons();
@@ -461,11 +549,9 @@ function clearAll() {
 
 // ============================================================
 // 8. INVOICE NUMBER / 发票号
+//    Format: DDMMYY + store name (uppercase, alphanumeric only)
+//    格式：DDMMYY + 店名大写（仅保留字母数字）
 // ============================================================
-
-// Normalize store name: uppercase + strip everything except A-Z 0-9
-// 店名标准化：大写 + 去掉字母数字以外的所有字符（空格、& 等）
-// e.g. "d&k" → "DK",  "D & K" → "DK",  "tk" → "TK"
 function normalizeStore(name) {
   return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -482,9 +568,6 @@ function getInvNum(storeName) {
 // ============================================================
 // 9. INVOICE HTML BUILDER / 发票HTML构建
 //    Columns: # | QTY | Description | Unit $ | Sub $ | Disc | Total $
-//    列：序号 | 数量 | 产品 | 单价 | 小计(折前) | 折扣 | 合计(折后)
-//    Font: Arial bold / 字体：Arial 加粗
-//    Prices are GST-inclusive — no separate GST line / 含GST，不单独显示
 // ============================================================
 function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
   const F = 'font-family:Arial,Helvetica,sans-serif;font-weight:700;';
@@ -494,21 +577,14 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     const tot = lineAfterDisc(product, qty, isExchange);
     const dl  = discLabel(product, isExchange);
 
-    // Exchange: grey italic row, $0 amounts / 换货行：灰色斜体，金额$0
-    const rowStyle = isExchange ? 'opacity:0.75;' : '';
-    const descCell = isExchange
-      ? `[EX] ${product.name}`
-      : product.name;
-
+    const rowStyle  = isExchange ? 'opacity:0.75;' : '';
+    const descCell  = isExchange ? `[EX] ${product.name}` : product.name;
     const discColor = isExchange          ? '#9ca3af' :
       CAT_A.has(product.shorts)           ? '#ea580c' :
       product.shorts === 'Salt'           ? '#9333ea' :
       dl                                  ? '#2563eb' : '#9ca3af';
+    const totStyle  = (!isExchange && sub !== tot) ? 'background:#fef9c3;' : '';
 
-    // Highlight total cell when discounted / 有折扣时高亮合计列
-    const totStyle = (!isExchange && sub !== tot) ? 'background:#fef9c3;' : '';
-
-    // Unit price: always show real price so value is visible / 单价始终显示真实价格
     const unitDisplay = `$${product.price.toFixed(2)}`;
     const subDisplay  = isExchange ? '$0.00' : `$${sub.toFixed(2)}`;
     const totDisplay  = isExchange ? '$0.00' : `$${tot.toFixed(2)}`;
@@ -526,21 +602,24 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
   }).join('');
 
   // Payment badge / 支付标签
-  const payBadge = isTransfer
-    ? `<span style="${F}font-size:13px;background:#dbeafe;color:#1e40af;padding:4px 14px;border-radius:999px;">TRANSFER</span>`
-    : `<span style="${F}font-size:13px;background:#dcfce7;color:#15803d;padding:4px 14px;border-radius:999px;">CASH</span>`;
+  const payBadgeMap = {
+    cash:     { bg: '#dcfce7', color: '#15803d', label: 'CASH' },
+    transfer: { bg: '#dbeafe', color: '#1e40af', label: 'TRANSFER' },
+    cheque:   { bg: '#fef3c7', color: '#92400e', label: 'CHEQUE' },
+  };
+  const pb       = payBadgeMap[paymentType] || payBadgeMap.cash;
+  const payBadge = `<span style="${F}font-size:13px;background:${pb.bg};color:${pb.color};padding:4px 14px;border-radius:999px;">${pb.label}</span>`;
 
-  // Footer row builder (spans all 7 columns) / 页脚行构建（跨7列）
+  // Footer row helper / 页脚行构建
   const fRow = (label, value, size = '16px', color = '#111827', borderTop = false) => `
     <tr style="${borderTop ? 'border-top:2px solid #111827;' : ''}">
       <td colspan="6" style="${F}font-size:${size};padding:7px 4px 7px 0;text-align:right;color:${color};">${label}</td>
       <td style="${F}font-size:${size};padding:7px 5px;text-align:right;color:${color};">${value}</td>
     </tr>`;
 
-  // Sub Total = all lines pre-discount / 小计 = 所有行打折前总和
   let footerRows = fRow('Sub Total', `$${s.subTotal.toFixed(2)}`);
 
-  // Combined discount: Cat A 10% + Cat B global% / 合并折扣：含海苔10%
+  // Discount breakdown / 折扣明细
   if (s.discAmt > 0) {
     footerRows += fRow('Discount', `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
     if (s.catBDiscAmt > 0) {
@@ -551,7 +630,8 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     }
   }
 
-  if (!isTransfer) {
+  // Cash: rounding + Cash Total / Transfer & Cheque: Total only
+  if (paymentType === 'cash') {
     if (s.cashRounding !== 0) {
       const absR = Math.abs(s.cashRounding).toFixed(2);
       const sign = s.cashRounding > 0 ? '+$' : '-$';
@@ -567,7 +647,6 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
 
       <!-- Header / 发票头部 -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:16px 16px 12px;">
-        <!-- Left: company + recipient / 左：公司信息与收件方 -->
         <div style="flex:1;min-width:0;padding-right:12px;">
           <div style="${F}font-size:20px;text-transform:uppercase;line-height:1.2;">Tax Invoice</div>
           <div style="margin-top:10px;">
@@ -579,7 +658,6 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
             <div style="${F}font-size:16px;color:#111827;text-decoration:underline;margin-top:1px;">${storeName}</div>
           </div>
         </div>
-        <!-- Right: invoice # + date + badge / 右：发票号、日期、支付标签 -->
         <div style="text-align:right;flex-shrink:0;">
           <div style="${F}font-size:11px;color:#9ca3af;">Invoice #</div>
           <div style="${F}font-size:14px;color:#111827;letter-spacing:0.02em;">${invNum}</div>
@@ -588,8 +666,7 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
         </div>
       </div>
 
-      <!-- Line items table: # QTY Description Unit$ Sub$ Disc Total$ -->
-      <!-- 产品明细：序号 数量 产品名 单价 小计 折扣 合计 -->
+      <!-- Line items / 产品明细 -->
       <table style="width:100%;border-collapse:collapse;border-top:1.5px solid #d1d5db;">
         <thead>
           <tr style="background:#f3f4f6;border-bottom:1.5px solid #d1d5db;">
@@ -637,7 +714,6 @@ function generateInvoice() {
   const s       = calcSummary(items);
   const html    = buildInvoiceHTML(invNum, dateStr, storeName, items, s);
 
-  // Show parse warnings above invoice if any / 显示解析警告
   let warningHtml = '';
   if (errors.length > 0) {
     warningHtml = `<div class="mb-3 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2">
@@ -652,14 +728,16 @@ function generateInvoice() {
 
   _currentInvoiceData = {
     invNum, dateStr, storeName,
-    orderText: document.getElementById('order-input').value,
-    globalDiscount, isTransfer, summary: s, html,
+    orderText:     document.getElementById('order-input').value,
+    globalDiscount,
+    paymentType,   // replaces old isTransfer / 替换旧的 isTransfer
+    summary: s,
+    html,
   };
 
-  // Persist state / 持久化状态
   localStorage.setItem('orderText_v2', document.getElementById('order-input').value);
-  localStorage.setItem('disc_v2', String(globalDiscount));
-  localStorage.setItem('transfer_v2', String(isTransfer));
+  localStorage.setItem('disc_v2',      String(globalDiscount));
+  localStorage.setItem('payType_v2',   paymentType);
 }
 
 function saveAndClose() {
@@ -667,6 +745,8 @@ function saveAndClose() {
   saveInvoiceToDB(_currentInvoiceData, () => {
     alert(`Saved: ${_currentInvoiceData.invNum}`);
     closeModal();
+    // Refresh van page if active / 如在Van页则刷新
+    if (currentTab === 'van') renderVanPage();
   });
 }
 
@@ -710,6 +790,17 @@ function saveInvoiceToDB(data, cb) {
   tx.oncomplete = cb;
 }
 
+// Backward compat: old invoices have isTransfer bool, new have paymentType
+// 向后兼容：旧发票有isTransfer布尔值，新发票有paymentType字符串
+function getInvPayType(inv) {
+  if (inv.paymentType) return inv.paymentType;
+  return inv.isTransfer ? 'transfer' : 'cash';
+}
+
+function getInvTotal(inv) {
+  return getInvPayType(inv) === 'cash' ? inv.summary.cashTotal : inv.summary.totalAfterDisc;
+}
+
 function openHistory() {
   document.getElementById('history-modal').classList.remove('hidden');
   renderHistory();
@@ -729,13 +820,15 @@ function renderHistory() {
       el.innerHTML = `<p class="text-center text-gray-300 text-sm py-12">No saved invoices</p>`;
       return;
     }
+    const badgeMap = {
+      cash:     `<span class="text-xs text-green-600 font-semibold">Cash</span>`,
+      transfer: `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`,
+      cheque:   `<span class="text-xs text-yellow-600 font-semibold">Cheque</span>`,
+    };
     el.innerHTML = list.map(inv => {
-      const total = (inv.isTransfer
-        ? inv.summary.totalAfterDisc
-        : inv.summary.cashTotal).toFixed(2);
-      const badge = inv.isTransfer
-        ? `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`
-        : `<span class="text-xs text-green-600 font-semibold">Cash</span>`;
+      const pt    = getInvPayType(inv);
+      const total = getInvTotal(inv).toFixed(2);
+      const badge = badgeMap[pt] || badgeMap.cash;
       return `
         <div class="flex items-center px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
              onclick="viewSavedInvoice('${inv.invNum}')">
@@ -769,14 +862,24 @@ function viewSavedInvoice(invNum) {
 
 // ============================================================
 // 12. LOCALSTORAGE PERSISTENCE / 持久化
+//     Backward compat: migrate old 'transfer_v2' → 'payType_v2'
 // ============================================================
 function loadPersistedState() {
   const text = localStorage.getItem('orderText_v2');
   if (text) document.getElementById('order-input').value = text;
+
   globalDiscount = parseInt(localStorage.getItem('disc_v2') || '0', 10);
-  isTransfer     = localStorage.getItem('transfer_v2') === 'true';
+
+  const savedPay = localStorage.getItem('payType_v2');
+  if (savedPay) {
+    paymentType = savedPay;
+  } else {
+    // Migrate old boolean isTransfer / 迁移旧布尔值
+    paymentType = localStorage.getItem('transfer_v2') === 'true' ? 'transfer' : 'cash';
+  }
+
   renderControlButtons();
-  onTextareaInput(); // refresh displays
+  onTextareaInput();
 }
 
 
@@ -801,7 +904,279 @@ function loadPersistedState() {
 
 
 // ============================================================
-// 14. INIT / 初始化
+// 14. VAN SALES MODULE / 车销管理模块
+// ============================================================
+
+// --- Date helpers / 日期工具 ---
+
+function getTodayPrefix() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getFullYear()).slice(-2)}`;
+}
+
+function getTodayDateStr() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+// --- Tab navigation / 标签页导航 ---
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('sales-page').classList.toggle('hidden', tab !== 'sales');
+  document.getElementById('van-page').classList.toggle('hidden', tab !== 'van');
+
+  const base   = 'flex-1 py-3 flex flex-col items-center gap-0.5 btn-press';
+  document.getElementById('tab-sales').className = tab === 'sales'
+    ? `${base} text-blue-600` : `${base} text-gray-400`;
+  document.getElementById('tab-van').className = tab === 'van'
+    ? `${base} text-blue-600` : `${base} text-gray-400`;
+
+  if (tab === 'van') renderVanPage();
+}
+
+// --- Load-In / 出货录入 ---
+
+const LOAD_IN_KEY = () => `loadIn_${getTodayPrefix()}`;
+
+function getLoadIn() {
+  const d = localStorage.getItem(LOAD_IN_KEY());
+  return d ? JSON.parse(d) : null;
+}
+
+function renderLoadInForm() {
+  const loadIn = getLoadIn();
+  const isSet  = loadIn !== null;
+
+  document.getElementById('btn-edit-load').classList.toggle('hidden', !isSet);
+  document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
+
+  const form = document.getElementById('load-in-form');
+  form.innerHTML = PRODUCTS.map(p => {
+    const qty   = loadIn ? (loadIn[p.shorts] || '') : '';
+    const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
+    return `
+      <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
+        <span class="text-xs font-mono font-bold text-blue-500 w-12 shrink-0">${p.shorts}</span>
+        <span class="text-xs text-gray-600 flex-1 truncate pr-2">${p.name}</span>
+        <input type="number" min="0" inputmode="numeric"
+          class="load-in-qty w-16 text-right text-sm font-bold border border-gray-200 rounded-lg px-2 py-1.5 ${disCls}"
+          data-shorts="${p.shorts}" value="${qty}" ${isSet ? 'disabled' : ''} placeholder="0">
+      </div>`;
+  }).join('');
+}
+
+function saveLoadIn() {
+  const inputs = document.querySelectorAll('.load-in-qty');
+  const data   = {};
+  inputs.forEach(inp => {
+    const qty = parseInt(inp.value, 10);
+    if (qty > 0) data[inp.dataset.shorts] = qty;
+  });
+  localStorage.setItem(LOAD_IN_KEY(), JSON.stringify(data));
+  renderVanPage();
+}
+
+function editLoadIn() {
+  document.getElementById('btn-edit-load').classList.add('hidden');
+  document.getElementById('btn-save-load').classList.remove('hidden');
+  document.querySelectorAll('.load-in-qty').forEach(inp => {
+    inp.disabled = false;
+    inp.className = inp.className.replace('bg-gray-50', 'bg-white').replace('text-gray-400', '');
+  });
+}
+
+// --- Today's invoices from IndexedDB / 从IndexedDB获取今日发票 ---
+
+function getTodayInvoices(cb) {
+  if (!db) return cb([]);
+  const prefix = getTodayPrefix();
+  const req    = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
+  req.onsuccess = e => cb(e.target.result.filter(inv => inv.invNum.startsWith(prefix)));
+  req.onerror   = () => cb([]);
+}
+
+// --- Sold quantities: re-parse orderText of each invoice ---
+// --- 已售数量：重新解析每张发票的orderText ---
+function calcSoldQty(invoices) {
+  const sold = {};
+  invoices.forEach(inv => {
+    if (!inv.orderText) return;
+    inv.orderText.split('\n').slice(1).forEach(line => {
+      if (!line.trim()) return;
+      const r = parseCommand(line);
+      if (r.error || r.isExchange) return; // exchange items don't count as sold / 换货不计入已售
+      sold[r.product.shorts] = (sold[r.product.shorts] || 0) + r.qty;
+    });
+  });
+  return sold;
+}
+
+// --- Render Van page / 渲染Van页 ---
+
+function renderVanPage() {
+  document.getElementById('van-date').textContent = getTodayDateStr();
+  renderLoadInForm();
+  getTodayInvoices(invoices => {
+    renderSalesSummary(invoices);
+    renderInventoryTable(invoices);
+  });
+}
+
+// --- Sales summary by payment type / 按支付方式的销售汇总 ---
+
+function renderSalesSummary(invoices) {
+  const totals = { cash: 0, transfer: 0, cheque: 0 };
+  const counts = { cash: 0, transfer: 0, cheque: 0 };
+  invoices.forEach(inv => {
+    const pt = getInvPayType(inv);
+    totals[pt] = (totals[pt] || 0) + getInvTotal(inv);
+    counts[pt] = (counts[pt] || 0) + 1;
+  });
+  const grandTotal = totals.cash + totals.transfer + totals.cheque;
+  const el = document.getElementById('sales-summary');
+
+  if (!invoices.length) {
+    el.innerHTML = '<p class="text-sm text-gray-300 text-center py-4">No sales today</p>';
+    return;
+  }
+
+  const rows = [
+    { label: 'T · Cash',     pt: 'cash',     color: '#15803d' },
+    { label: 'E · Transfer', pt: 'transfer', color: '#1e40af' },
+    { label: 'Q · Cheque',   pt: 'cheque',   color: '#92400e' },
+  ].filter(r => counts[r.pt] > 0);
+
+  el.innerHTML = rows.map(r => `
+    <div class="flex items-center justify-between py-2 border-b border-gray-50">
+      <span class="text-sm font-medium text-gray-600">${r.label}</span>
+      <div class="text-right">
+        <span class="text-sm font-bold" style="color:${r.color};">$${totals[r.pt].toFixed(2)}</span>
+        <span class="text-xs text-gray-400 ml-1">(${counts[r.pt]})</span>
+      </div>
+    </div>
+  `).join('') + `
+    <div class="flex items-center justify-between pt-2">
+      <span class="text-base font-bold text-gray-800">Total</span>
+      <span class="text-lg font-bold text-gray-800">$${grandTotal.toFixed(2)}</span>
+    </div>`;
+}
+
+// --- Inventory table / 库存余量表 ---
+
+function renderInventoryTable(invoices) {
+  const loadIn = getLoadIn();
+  const el     = document.getElementById('inventory-table');
+
+  if (!loadIn) {
+    el.innerHTML = '<p class="text-xs text-gray-300 text-center py-3">Set morning load-in first / 请先录入出货量</p>';
+    return;
+  }
+
+  const sold   = calcSoldQty(invoices);
+  const loaded = PRODUCTS.filter(p => (loadIn[p.shorts] || 0) > 0);
+
+  if (!loaded.length) {
+    el.innerHTML = '<p class="text-xs text-gray-300 text-center py-3">No products loaded today</p>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="flex items-center py-1.5 border-b border-gray-200 text-xs text-gray-400 font-medium">
+      <span class="flex-1">Product</span>
+      <span class="w-10 text-center">Out</span>
+      <span class="w-10 text-center">Sold</span>
+      <span class="w-10 text-right">Left</span>
+    </div>` +
+  loaded.map(p => {
+    const loadedQty = loadIn[p.shorts] || 0;
+    const soldQty   = sold[p.shorts]   || 0;
+    const left      = loadedQty - soldQty;
+    const leftCls   = left < 0 ? 'text-red-500' : left === 0 ? 'text-gray-400' : 'text-green-600';
+    return `
+      <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
+        <span class="flex-1 text-xs text-gray-700 leading-tight pr-1">${p.name}</span>
+        <span class="w-10 text-center text-sm text-gray-500">${loadedQty}</span>
+        <span class="w-10 text-center text-sm text-gray-500">${soldQty}</span>
+        <span class="w-10 text-right text-sm font-bold ${leftCls}">${left}</span>
+      </div>`;
+  }).join('');
+}
+
+// --- Day Summary text / 日结文本摘要 ---
+
+function generateSummary() {
+  getTodayInvoices(invoices => {
+    const loadIn = getLoadIn();
+    const sold   = calcSoldQty(invoices);
+
+    const totals = { cash: 0, transfer: 0, cheque: 0 };
+    const counts = { cash: 0, transfer: 0, cheque: 0 };
+    invoices.forEach(inv => {
+      const pt = getInvPayType(inv);
+      totals[pt] += getInvTotal(inv);
+      counts[pt]++;
+    });
+    const grandTotal = totals.cash + totals.transfer + totals.cheque;
+
+    const d       = new Date();
+    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+
+    let text = `=== Van Sales Summary · ${dateStr} ===\n\n`;
+    text += `SALES\n`;
+    if (counts.cash > 0)
+      text += `T Cash:     $${totals.cash.toFixed(2).padStart(9)}  (${counts.cash} orders)\n`;
+    if (counts.transfer > 0)
+      text += `E Transfer: $${totals.transfer.toFixed(2).padStart(9)}  (${counts.transfer} orders)\n`;
+    if (counts.cheque > 0)
+      text += `Q Cheque:   $${totals.cheque.toFixed(2).padStart(9)}  (${counts.cheque} orders)\n`;
+    text += `TOTAL:      $${grandTotal.toFixed(2).padStart(9)}\n`;
+
+    if (loadIn) {
+      text += `\nINVENTORY\n`;
+      PRODUCTS.filter(p => (loadIn[p.shorts] || 0) > 0).forEach(p => {
+        const loadedQty = loadIn[p.shorts];
+        const soldQty   = sold[p.shorts] || 0;
+        const left      = loadedQty - soldQty;
+        const name      = p.name.length > 22 ? p.name.slice(0, 21) + '…' : p.name;
+        text += `${name.padEnd(23)}  Out:${String(loadedQty).padStart(3)}  Sold:${String(soldQty).padStart(3)}  Left:${String(left).padStart(3)}\n`;
+      });
+    }
+
+    text += `\n— My Sales Calc`;
+
+    document.getElementById('summary-text').value = text;
+    document.getElementById('summary-modal').classList.remove('hidden');
+    lucide.createIcons();
+  });
+}
+
+function closeSummaryModal() {
+  document.getElementById('summary-modal').classList.add('hidden');
+}
+
+function copySummary() {
+  const el = document.getElementById('summary-text');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(el.value).then(() => alert('Copied!'));
+  } else {
+    el.select();
+    document.execCommand('copy');
+    alert('Copied!');
+  }
+}
+
+// --- Clear Day: remove today's load-in only, preserve invoice history ---
+// --- 清空当天：只删除出货录入，保留发票历史 ---
+function clearDay() {
+  if (!confirm('Clear today\'s load-in? Invoice history is kept.\n清空今日出货录入？发票历史保留。')) return;
+  localStorage.removeItem(LOAD_IN_KEY());
+  renderVanPage();
+}
+
+
+// ============================================================
+// 15. INIT / 初始化
 // ============================================================
 initDB(() => {
   loadPersistedState();
