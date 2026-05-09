@@ -160,10 +160,16 @@
   <div class="bg-white rounded-2xl shadow-sm px-4 py-3 mb-3">
     <div class="flex items-center justify-between mb-2">
       <h2 class="font-bold text-gray-700 text-sm">Morning Load-In / 出货录入</h2>
-      <button id="btn-edit-load" onclick="editLoadIn()"
-        class="hidden text-xs text-blue-500 font-semibold btn-press border border-blue-200 px-2 py-1 rounded-lg">
-        ✏ Edit
-      </button>
+      <div class="flex items-center gap-1.5">
+        <button id="btn-edit-load" onclick="editLoadIn()"
+          class="hidden text-xs text-blue-500 font-semibold btn-press border border-blue-200 px-2 py-1 rounded-lg">
+          ✏ Edit
+        </button>
+        <button id="btn-toggle-load" onclick="toggleLoadInCollapse()"
+          class="hidden text-gray-400 hover:text-gray-600 btn-press p-1 rounded-lg">
+          <i id="icon-toggle-load" data-lucide="chevron-up" class="w-4 h-4"></i>
+        </button>
+      </div>
     </div>
     <!-- Scrollable product list / 可滚动产品列表 -->
     <div id="load-in-form" style="max-height:52vh;overflow-y:auto;"></div>
@@ -473,6 +479,7 @@ let paymentType     = 'cash';  // 'cash' | 'transfer' | 'cheque'
 let currentTab      = 'sales';
 let selectedKeys    = new Set();
 let dayMap          = {};   // dateStr → [invNum, ...]
+let loadInCollapsed = false;
 let expenses        = { lunch: 0, petrol: 0, others: 0, others2: 0, label1: '', label2: '' };
 
 
@@ -1250,6 +1257,7 @@ function renderLoadInForm() {
 
   document.getElementById('btn-edit-load').classList.toggle('hidden', !isSet);
   document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
+  document.getElementById('btn-toggle-load').classList.toggle('hidden', !isSet);
 
   // Priority first, then remaining products / 优先列表在前，其余产品在后
   const ordered = [
@@ -1298,6 +1306,26 @@ function renderLoadInForm() {
         <div class="flex items-center gap-1 shrink-0">${inputs}</div>
       </div>`;
   }).join('');
+
+  // Apply collapsed state
+  const collapsed = loadInCollapsed && isSet;
+  document.getElementById('load-in-form').classList.toggle('hidden', collapsed);
+  const icon = document.getElementById('icon-toggle-load');
+  if (icon) {
+    icon.setAttribute('data-lucide', collapsed ? 'chevron-down' : 'chevron-up');
+    lucide.createIcons({ nodes: [icon] });
+  }
+}
+
+function toggleLoadInCollapse() {
+  loadInCollapsed = !loadInCollapsed;
+  const form = document.getElementById('load-in-form');
+  form.classList.toggle('hidden', loadInCollapsed);
+  const icon = document.getElementById('icon-toggle-load');
+  if (icon) {
+    icon.setAttribute('data-lucide', loadInCollapsed ? 'chevron-down' : 'chevron-up');
+    lucide.createIcons({ nodes: [icon] });
+  }
 }
 
 function saveLoadIn() {
@@ -1316,10 +1344,12 @@ function saveLoadIn() {
       delete data[shorts];
   });
   localStorage.setItem(LOAD_IN_KEY(), JSON.stringify(data));
+  loadInCollapsed = true;
   renderVanPage();
 }
 
 function editLoadIn() {
+  loadInCollapsed = false;
   document.getElementById('btn-edit-load').classList.add('hidden');
   document.getElementById('btn-save-load').classList.remove('hidden');
   document.querySelectorAll('.load-in-input').forEach(inp => {
