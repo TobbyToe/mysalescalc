@@ -936,6 +936,11 @@ function switchTab(tab) {
 // Priority order for the load-in form / 出货录入的产品显示顺序
 const VAN_ORDER = ['C','WC','95','1.5K','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','GG','PG','J','P','S','VS','M','B'];
 
+// ea-only: sold loose, no box concept / 只卖散货，无整箱概念
+const EA_ONLY  = new Set(['SS','DRS','BF','RSS','FG','SQ','GG','PG','PGS','CG','LR','SO','0.5lb','1lb','2lb','5lb']);
+// box-only: always sold by full box / 只按整箱卖
+const BOX_ONLY = new Set(['S','VS','M','B','J','P']);
+
 const LOAD_IN_KEY = () => `loadIn_${getTodayPrefix()}`;
 
 function getLoadIn() {
@@ -956,6 +961,9 @@ function renderLoadInForm() {
     ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
   ];
 
+  const inputCls = (disCls) =>
+    `load-in-input w-14 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}`;
+
   const form = document.getElementById('load-in-form');
   form.innerHTML = ordered.map(p => {
     const stored = loadIn ? (loadIn[p.shorts] || null) : null;
@@ -963,19 +971,35 @@ function renderLoadInForm() {
     const eaVal  = stored ? (typeof stored === 'object' ? (stored.ea  || '') : stored) : '';
     const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
     const dis    = isSet ? 'disabled' : '';
+
+    let inputs;
+    if (EA_ONLY.has(p.shorts)) {
+      // Single ea input only / 只有个数输入
+      inputs = `<input type="number" min="0" inputmode="numeric"
+        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="ea"
+        value="${eaVal}" ${dis} placeholder="0">`;
+    } else if (BOX_ONLY.has(p.shorts)) {
+      // Single box input with ×N label / 只有箱数输入
+      inputs = `<input type="number" min="0" inputmode="numeric"
+        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
+        value="${boxVal}" ${dis} placeholder="0">
+        <span class="text-xs text-gray-400">×${p.eaBox}</span>`;
+    } else {
+      // Both box + ea / 箱数 + 散个数
+      inputs = `<input type="number" min="0" inputmode="numeric"
+        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
+        value="${boxVal}" ${dis} placeholder="0">
+        <span class="text-xs text-gray-400">×${p.eaBox}</span>
+        <input type="number" min="0" inputmode="numeric"
+        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="ea"
+        value="${eaVal}" ${dis} placeholder="ea">`;
+    }
+
     return `
       <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
         <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
         <span class="text-xs text-gray-600 flex-1 min-w-0 truncate pr-1">${p.name}</span>
-        <div class="flex items-center gap-1 shrink-0">
-          <input type="number" min="0" inputmode="numeric"
-            class="load-in-input w-11 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}"
-            data-shorts="${p.shorts}" data-type="box" value="${boxVal}" ${dis} placeholder="0">
-          <span class="text-xs text-gray-400 w-6 text-center">×${p.eaBox}</span>
-          <input type="number" min="0" inputmode="numeric"
-            class="load-in-input w-11 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}"
-            data-shorts="${p.shorts}" data-type="ea" value="${eaVal}" ${dis} placeholder="ea">
-        </div>
+        <div class="flex items-center gap-1 shrink-0">${inputs}</div>
       </div>`;
   }).join('');
 }
