@@ -245,13 +245,26 @@
   class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-center justify-center px-4" style="z-index:50;">
   <div class="bg-white w-full max-w-md rounded-2xl p-4">
     <div class="flex items-center justify-between mb-3">
-      <span class="font-bold text-gray-800">Day Summary / 日结摘要</span>
+      <span class="font-bold text-gray-800">Day Summary · <span id="summary-date-title" class="text-blue-600"></span></span>
       <button onclick="closeSummaryModal()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
-    <textarea id="summary-text" readonly
-      class="w-full h-56 text-xs font-mono border border-gray-100 rounded-xl p-3 resize-none bg-gray-50"></textarea>
+    <div class="overflow-auto max-h-80">
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-xs text-gray-500">
+            <th class="text-left pb-2 font-semibold">Store</th>
+            <th class="text-right pb-2 font-semibold">Amount</th>
+            <th class="text-right pb-2 font-semibold">T/E/Q</th>
+          </tr>
+        </thead>
+        <tbody id="summary-rows"></tbody>
+        <tfoot id="summary-foot"></tfoot>
+      </table>
+    </div>
+    <textarea id="summary-text" readonly aria-hidden="true"
+      class="opacity-0 absolute w-0 h-0 overflow-hidden" tabindex="-1"></textarea>
     <button onclick="copySummary()"
       class="w-full mt-3 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm btn-press">
       📋 Copy to Clipboard
@@ -1155,7 +1168,7 @@ function renderInventoryTable(invoices) {
     const leftCls   = left < 0 ? 'text-red-500' : left === 0 ? 'text-gray-400' : 'text-green-600';
     return `
       <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
-        <span class="flex-1 text-xs text-gray-700 leading-tight pr-1">${p.name}</span>
+        <span class="flex-1 text-xs font-mono font-bold text-blue-600 pr-1">${p.shorts}</span>
         <span class="w-10 text-center text-sm text-gray-500">${loadedQty}</span>
         <span class="w-10 text-center text-sm text-gray-500">${soldQty}</span>
         <span class="w-10 text-right text-sm font-bold ${leftCls}">${left}</span>
@@ -1170,46 +1183,79 @@ function generateSummary() {
     const loadIn = getLoadIn();
     const sold   = calcSoldQty(invoices);
 
-    const totals = { cash: 0, transfer: 0, cheque: 0 };
-    const counts = { cash: 0, transfer: 0, cheque: 0 };
-    invoices.forEach(inv => {
-      const pt = getInvPayType(inv);
-      totals[pt] += getInvTotal(inv);
-      counts[pt]++;
-    });
-    const grandTotal = totals.cash + totals.transfer + totals.cheque;
-
     const d       = new Date();
     const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    document.getElementById('summary-date-title').textContent = dateStr;
 
-    let text = `=== Van Sales Summary · ${dateStr} ===\n\n`;
-    text += `SALES\n`;
-    if (counts.cash > 0)
-      text += `T Cash:     $${totals.cash.toFixed(2).padStart(9)}  (${counts.cash} orders)\n`;
-    if (counts.transfer > 0)
-      text += `E Transfer: $${totals.transfer.toFixed(2).padStart(9)}  (${counts.transfer} orders)\n`;
-    if (counts.cheque > 0)
-      text += `Q Cheque:   $${totals.cheque.toFixed(2).padStart(9)}  (${counts.cheque} orders)\n`;
-    text += `TOTAL:      $${grandTotal.toFixed(2).padStart(9)}\n`;
+    const totals   = { cash: 0, transfer: 0, cheque: 0 };
+    const PTLabel  = { cash: 'T', transfer: 'E', cheque: 'Q' };
+    const PTColor  = { cash: 'text-green-600', transfer: 'text-blue-600', cheque: 'text-orange-500' };
 
+    const tbody = document.getElementById('summary-rows');
+    tbody.innerHTML = '';
+    const textLines = [`=== Day Summary · ${dateStr} ===`, `${'Store'.padEnd(22)} ${'Amount'.padStart(9)}  T/E/Q`, '-'.repeat(38)];
+
+    invoices.forEach(inv => {
+      const pt    = getInvPayType(inv);
+      const amt   = getInvTotal(inv);
+      totals[pt] += amt;
+      const label = PTLabel[pt];
+      const store = inv.storeName || '—';
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-gray-100';
+      tr.innerHTML = `
+        <td class="py-1 text-gray-800">${store}</td>
+        <td class="py-1 text-right font-mono">$${amt.toFixed(2)}</td>
+        <td class="py-1 text-right font-bold ${PTColor[pt]}">${label}</td>`;
+      tbody.appendChild(tr);
+      textLines.push(`${store.padEnd(22)} $${amt.toFixed(2).padStart(8)}  ${label}`);
+    });
+
+    // Footer rows
+    const tfoot = document.getElementById('summary-foot');
+    tfoot.innerHTML = '';
+    textLines.push('-'.repeat(38));
+
+    const addFootRow = (label, amt, colorCls) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="pt-2 text-xs text-gray-500 font-semibold" colspan="2">${label}</td>
+        <td class="pt-2 text-right font-mono font-semibold ${colorCls}">$${amt.toFixed(2)}</td>`;
+      tfoot.appendChild(tr);
+      textLines.push(`${label.padEnd(22)} $${amt.toFixed(2).padStart(8)}`);
+    };
+
+    if (totals.cash > 0)     addFootRow('Total T (Cash)',     totals.cash,     'text-green-600');
+    if (totals.transfer > 0) addFootRow('Total E (Transfer)', totals.transfer, 'text-blue-600');
+    if (totals.cheque > 0)   addFootRow('Total Q (Cheque)',   totals.cheque,   'text-orange-500');
+
+    const grandTotal = totals.cash + totals.transfer + totals.cheque;
+    const gtr = document.createElement('tr');
+    gtr.className = 'border-t-2 border-gray-300';
+    gtr.innerHTML = `
+      <td class="pt-2 font-bold text-gray-900" colspan="2">Grand Total</td>
+      <td class="pt-2 text-right font-mono font-bold text-gray-900">$${grandTotal.toFixed(2)}</td>`;
+    tfoot.appendChild(gtr);
+    textLines.push('='.repeat(38));
+    textLines.push(`${'Grand Total'.padEnd(22)} $${grandTotal.toFixed(2).padStart(8)}`);
+
+    // Inventory section in clipboard text — use shortcodes
     if (loadIn) {
-      text += `\nINVENTORY\n`;
-      const summaryOrdered = [
+      textLines.push('', 'INVENTORY');
+      const ordered = [
         ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
         ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
       ].filter(p => getLoadedTotal(loadIn, p) > 0);
-      summaryOrdered.forEach(p => {
+      ordered.forEach(p => {
         const loadedQty = getLoadedTotal(loadIn, p);
         const soldQty   = sold[p.shorts] || 0;
         const left      = loadedQty - soldQty;
-        const name      = p.name.length > 22 ? p.name.slice(0, 21) + '…' : p.name;
-        text += `${name.padEnd(23)}  Out:${String(loadedQty).padStart(3)}  Sold:${String(soldQty).padStart(3)}  Left:${String(left).padStart(3)}\n`;
+        textLines.push(`${p.shorts.padEnd(8)} Out:${String(loadedQty).padStart(3)}  Sold:${String(soldQty).padStart(3)}  Left:${String(left).padStart(3)}`);
       });
     }
 
-    text += `\n— My Sales Calc`;
-
-    document.getElementById('summary-text').value = text;
+    textLines.push('', '— My Sales Calc');
+    document.getElementById('summary-text').value = textLines.join('\n');
     document.getElementById('summary-modal').classList.remove('hidden');
     lucide.createIcons();
   });
