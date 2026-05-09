@@ -51,15 +51,15 @@
       <i data-lucide="truck" class="w-5 h-5"></i>
       <span class="text-xs font-medium">Van</span>
     </button>
-    <button id="tab-history" onclick="switchTab('history')"
-      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
-      <i data-lucide="clock" class="w-5 h-5"></i>
-      <span class="text-xs font-medium">History</span>
-    </button>
     <button id="tab-expenses" onclick="switchTab('expenses')"
       class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
       <i data-lucide="receipt" class="w-5 h-5"></i>
       <span class="text-xs font-medium">Expenses</span>
+    </button>
+    <button id="tab-history" onclick="switchTab('history')"
+      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
+      <i data-lucide="clock" class="w-5 h-5"></i>
+      <span class="text-xs font-medium">History</span>
     </button>
   </div>
 </nav>
@@ -209,10 +209,16 @@
 <div id="history-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
   <div class="flex items-center justify-between mb-3">
     <h1 class="text-xl font-bold text-gray-800 tracking-tight">Invoice History</h1>
-    <button id="history-summary-btn" onclick="summarySelected()"
-      class="hidden bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
-      Summary (<span id="selected-count">0</span>)
-    </button>
+    <div class="flex gap-2">
+      <button id="history-delete-btn" onclick="deleteSelected()"
+        class="hidden bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
+        Delete (<span id="selected-count">0</span>)
+      </button>
+      <button id="history-summary-btn" onclick="summarySelected()"
+        class="hidden bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
+        Summary
+      </button>
+    </div>
   </div>
   <div class="mb-3 relative">
     <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-2.5 top-3 pointer-events-none"></i>
@@ -1001,11 +1007,17 @@ function deleteInvoice(invNum) {
   tx.objectStore('invoices').delete(invNum);
   tx.oncomplete = () => {
     selectedKeys.delete(invNum);
-    const count = selectedKeys.size;
-    document.getElementById('selected-count').textContent = count;
-    document.getElementById('history-summary-btn').classList.toggle('hidden', count === 0);
+    updateSelectionUI();
     renderHistoryPage();
   };
+}
+
+function updateSelectionUI() {
+  const count = selectedKeys.size;
+  document.getElementById('selected-count').textContent = count;
+  const show = count > 0;
+  document.getElementById('history-delete-btn').classList.toggle('hidden', !show);
+  document.getElementById('history-summary-btn').classList.toggle('hidden', !show);
 }
 
 function toggleSelect(invNum) {
@@ -1014,10 +1026,27 @@ function toggleSelect(invNum) {
   } else {
     selectedKeys.add(invNum);
   }
-  const count = selectedKeys.size;
-  document.getElementById('selected-count').textContent = count;
-  document.getElementById('history-summary-btn').classList.toggle('hidden', count === 0);
+  updateSelectionUI();
   renderHistoryPage();
+}
+
+function deleteSelected() {
+  if (!db || !selectedKeys.size) return;
+  const keys = [...selectedKeys];
+  const names = keys.join(', ');
+  if (!confirm(`Delete ${keys.length} invoice(s)?\n\n${names}`)) return;
+  let pending = keys.length;
+  keys.forEach(invNum => {
+    const tx = db.transaction('invoices', 'readwrite');
+    tx.objectStore('invoices').delete(invNum);
+    tx.oncomplete = () => {
+      selectedKeys.delete(invNum);
+      if (--pending === 0) {
+        updateSelectionUI();
+        renderHistoryPage();
+      }
+    };
+  });
 }
 
 function summarySelected() {
