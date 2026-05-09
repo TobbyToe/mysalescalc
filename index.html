@@ -207,19 +207,29 @@
 <!-- HISTORY PAGE / 历史记录页                                       -->
 <!-- ============================================================ -->
 <div id="history-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
-  <div class="flex items-center justify-between mb-3">
+  <div class="flex items-center justify-between mb-2">
     <h1 class="text-xl font-bold text-gray-800 tracking-tight">Invoice History</h1>
-    <div class="flex gap-2">
-      <button id="history-delete-btn" onclick="deleteSelected()"
-        class="hidden bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
-        Delete (<span id="selected-count">0</span>)
-      </button>
-      <button id="history-summary-btn" onclick="summarySelected()"
-        class="hidden bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
-        Summary
-      </button>
-    </div>
+    <span id="sel-label" class="hidden text-xs text-gray-400 font-mono"></span>
   </div>
+
+  <!-- Selection action bar — shown when ≥1 item selected -->
+  <div id="history-sel-actions" class="hidden mb-2 flex flex-wrap gap-1.5 justify-end">
+    <button onclick="deleteSelected()"
+      class="bg-red-500 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold btn-press">
+      🗑 Del (<span id="selected-count">0</span>)
+    </button>
+    <button onclick="exportCSV()"
+      class="bg-gray-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold btn-press">CSV</button>
+    <button onclick="exportPDF()"
+      class="bg-gray-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold btn-press">PDF</button>
+    <button onclick="shareSelected()"
+      class="bg-gray-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold btn-press flex items-center gap-1">
+      <i data-lucide="share-2" class="w-3 h-3"></i>Share
+    </button>
+    <button onclick="summarySelected()"
+      class="bg-blue-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold btn-press">Summary</button>
+  </div>
+
   <div class="mb-3 relative">
     <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-2.5 top-3 pointer-events-none"></i>
     <input id="history-filter" type="search" placeholder="Filter by store…"
@@ -462,6 +472,7 @@ let globalDiscount  = 0;       // 0 | 2 | 4
 let paymentType     = 'cash';  // 'cash' | 'transfer' | 'cheque'
 let currentTab      = 'sales';
 let selectedKeys    = new Set();
+let dayMap          = {};   // dateStr → [invNum, ...]
 let expenses        = { lunch: 0, petrol: 0, others: 0, others2: 0, label1: '', label2: '' };
 
 
@@ -954,19 +965,39 @@ function renderHistoryPage() {
     // Group by date / 按日期分组
     const groups = {};
     const groupOrder = [];
+    dayMap = {};
     list.forEach(inv => {
       const day = inv.dateStr || '—';
-      if (!groups[day]) { groups[day] = []; groupOrder.push(day); }
+      if (!groups[day]) { groups[day] = []; groupOrder.push(day); dayMap[day] = []; }
       groups[day].push(inv);
+      dayMap[day].push(inv.invNum);
     });
 
     let html = '';
     groupOrder.forEach(day => {
       const dayList  = groups[day];
       const dayTotal = dayList.reduce((s, inv) => s + getInvTotal(inv), 0);
+      const selCount = dayList.filter(inv => selectedKeys.has(inv.invNum)).length;
+      const allSel   = selCount === dayList.length;
+      const partSel  = selCount > 0 && !allSel;
+      const chkStyle = allSel
+        ? 'background:#2563eb;border-color:#2563eb'
+        : partSel
+        ? 'background:#93c5fd;border-color:#93c5fd'
+        : 'background:white;border-color:#d1d5db';
+      const chkMark = allSel
+        ? `<svg width="10" height="10" viewBox="0 0 20 20" fill="white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`
+        : partSel
+        ? `<svg width="10" height="10" viewBox="0 0 20 20" fill="white"><rect x="3" y="9" width="14" height="2" rx="1"/></svg>`
+        : '';
+      const escapedDay = day.replace(/\//g, '_');
       html += `
-        <div class="flex items-center justify-between px-3 py-1.5 bg-gray-100 border-b border-gray-200 sticky top-0">
-          <span class="text-xs font-bold text-gray-500 tracking-wide">${day}</span>
+        <div class="flex items-center px-3 py-1.5 bg-gray-100 border-b border-gray-200 sticky top-0 cursor-pointer select-none"
+             onclick="toggleDaySelect('${escapedDay}')">
+          <div style="width:16px;height:16px;border-radius:4px;border:2px solid;${chkStyle};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:8px;">
+            ${chkMark}
+          </div>
+          <span class="text-xs font-bold text-gray-500 tracking-wide flex-1">${day}</span>
           <span class="text-xs font-mono font-semibold text-gray-400">$${dayTotal.toFixed(2)}</span>
         </div>`;
       dayList.forEach((inv, idx) => {
@@ -1053,8 +1084,19 @@ function updateSelectionUI() {
   const count = selectedKeys.size;
   document.getElementById('selected-count').textContent = count;
   const show = count > 0;
-  document.getElementById('history-delete-btn').classList.toggle('hidden', !show);
-  document.getElementById('history-summary-btn').classList.toggle('hidden', !show);
+  document.getElementById('history-sel-actions').classList.toggle('hidden', !show);
+  const lbl = document.getElementById('sel-label');
+  if (show) { lbl.textContent = `${count} selected`; lbl.classList.remove('hidden'); }
+  else       { lbl.classList.add('hidden'); }
+}
+
+function toggleDaySelect(escapedDay) {
+  const day  = escapedDay.replace(/_/g, '/');
+  const keys = dayMap[day] || [];
+  const allSelected = keys.every(k => selectedKeys.has(k));
+  keys.forEach(k => allSelected ? selectedKeys.delete(k) : selectedKeys.add(k));
+  updateSelectionUI();
+  renderHistoryPage();
 }
 
 function toggleSelect(invNum) {
@@ -1592,7 +1634,113 @@ function clearDay() {
 
 
 // ============================================================
-// 15. EXPENSES / 报销管理
+// 15. EXPORT / SHARE / 导出与分享
+// ============================================================
+function getSelectedInvoices(cb) {
+  if (!db || !selectedKeys.size) return;
+  const keys    = [...selectedKeys];
+  const results = [];
+  let pending   = keys.length;
+  keys.forEach(invNum => {
+    const req = db.transaction('invoices', 'readonly').objectStore('invoices').get(invNum);
+    req.onsuccess = e => {
+      if (e.target.result) results.push(e.target.result);
+      if (--pending === 0) {
+        results.sort((a, b) => a.invNum.localeCompare(b.invNum));
+        cb(results);
+      }
+    };
+  });
+}
+
+function buildCSV(invoices) {
+  const PTName = { cash: 'T·Cash', transfer: 'E·Transfer', cheque: 'Q·Cheque' };
+  const esc    = v => `"${String(v).replace(/"/g, '""')}"`;
+  const rows   = [['Date', 'Invoice No', 'Store', 'Payment', 'Amount']];
+  invoices.forEach(inv => {
+    const pt = getInvPayType(inv);
+    rows.push([inv.dateStr, inv.invNum, inv.storeName || '', PTName[pt] || pt, getInvTotal(inv).toFixed(2)]);
+  });
+  return '﻿' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+}
+
+async function downloadOrShare(blob, filename, title, text) {
+  if (navigator.share) {
+    try {
+      const file = new File([blob], filename, { type: blob.type });
+      const shareData = navigator.canShare && navigator.canShare({ files: [file] })
+        ? { files: [file], title, text }
+        : { title, text };
+      await navigator.share(shareData);
+      return;
+    } catch(e) { if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function exportCSV() {
+  getSelectedInvoices(invoices => {
+    const csv  = buildCSV(invoices);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const date = invoices[0]?.dateStr?.replace(/\//g, '') || 'export';
+    downloadOrShare(blob, `invoices_${date}.csv`, 'Invoice Export', buildShareText(invoices));
+  });
+}
+
+function exportPDF() {
+  getSelectedInvoices(invoices => {
+    const body = invoices.map((inv, i) =>
+      `<div${i < invoices.length - 1 ? ' style="page-break-after:always;"' : ''}>${inv.html}</div>`
+    ).join('');
+    const w = window.open('', '_blank', 'width=800,height=900');
+    if (!w) { alert('Allow popups to export PDF'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <style>body{margin:20px;font-family:'Courier New',monospace;}@media print{body{margin:0;}}</style>
+      </head><body>${body}
+      <script>window.onload=function(){window.print();}<\/script>
+      </body></html>`);
+    w.document.close();
+  });
+}
+
+function buildShareText(invoices) {
+  const PTLabel = { cash: 'T', transfer: 'E', cheque: 'Q' };
+  let text = `=== Invoice Summary ===\n`;
+  const totals = { cash: 0, transfer: 0, cheque: 0 };
+  invoices.forEach(inv => {
+    const pt  = getInvPayType(inv);
+    const amt = getInvTotal(inv);
+    totals[pt] += amt;
+    text += `${(inv.storeName || '—').padEnd(20)} $${amt.toFixed(2).padStart(7)}  ${PTLabel[pt]}\n`;
+  });
+  const grand = totals.cash + totals.transfer + totals.cheque;
+  if (totals.cash > 0)     text += `\nTotal T (Cash):     $${totals.cash.toFixed(2)}`;
+  if (totals.transfer > 0) text += `\nTotal E (Transfer): $${totals.transfer.toFixed(2)}`;
+  if (totals.cheque > 0)   text += `\nTotal Q (Cheque):   $${totals.cheque.toFixed(2)}`;
+  text += `\nGrand Total:        $${grand.toFixed(2)}`;
+  text += '\n\n— My Sales Calc';
+  return text;
+}
+
+function shareSelected() {
+  getSelectedInvoices(invoices => {
+    const text = buildShareText(invoices);
+    if (navigator.share) {
+      navigator.share({ title: 'Invoice Summary', text }).catch(e => {
+        if (e.name !== 'AbortError') navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard'));
+      });
+    } else {
+      navigator.clipboard?.writeText(text).then(() => alert('Copied to clipboard!'));
+    }
+  });
+}
+
+
+// ============================================================
+// 16. EXPENSES / 报销管理
 // ============================================================
 function fmtExp(el) {
   if (el.value) el.value = parseFloat(el.value).toFixed(2);
