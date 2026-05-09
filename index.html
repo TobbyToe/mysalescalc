@@ -202,7 +202,19 @@
 <!-- HISTORY PAGE / 历史记录页                                       -->
 <!-- ============================================================ -->
 <div id="history-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
-  <h1 class="text-xl font-bold text-gray-800 tracking-tight mb-3">Invoice History</h1>
+  <div class="flex items-center justify-between mb-3">
+    <h1 class="text-xl font-bold text-gray-800 tracking-tight">Invoice History</h1>
+    <button id="history-summary-btn" onclick="summarySelected()"
+      class="hidden bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold btn-press">
+      Summary (<span id="selected-count">0</span>)
+    </button>
+  </div>
+  <div class="mb-3 relative">
+    <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-2.5 top-3 pointer-events-none"></i>
+    <input id="history-filter" type="search" placeholder="Filter by store…"
+      class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm pl-8"
+      oninput="renderHistoryPage()">
+  </div>
   <div id="history-list-page" class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-gray-50"></div>
 </div>
 
@@ -245,7 +257,10 @@
   class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-center justify-center px-4" style="z-index:50;">
   <div class="bg-white w-full max-w-md rounded-2xl p-4">
     <div class="flex items-center justify-between mb-3">
-      <span class="font-bold text-gray-800">Day Summary · <span id="summary-date-title" class="text-blue-600"></span></span>
+      <div>
+        <span class="font-bold text-gray-800">Day Summary · <span id="summary-date-title" class="text-blue-600"></span></span>
+        <span id="summary-total-count" class="text-xs text-gray-400 ml-1 font-normal"></span>
+      </div>
       <button onclick="closeSummaryModal()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
@@ -253,10 +268,11 @@
     <div class="overflow-auto max-h-80">
       <table class="w-full text-sm border-collapse">
         <thead>
-          <tr class="border-b border-gray-200 text-xs text-gray-500">
+          <tr class="border-b-2 border-gray-200 text-xs text-gray-500 bg-white">
+            <th class="text-left pb-2 font-semibold w-7">#</th>
             <th class="text-left pb-2 font-semibold">Store</th>
             <th class="text-right pb-2 font-semibold">Amount</th>
-            <th class="text-right pb-2 font-semibold">T/E/Q</th>
+            <th class="text-right pb-2 font-semibold w-8">T/E/Q</th>
           </tr>
         </thead>
         <tbody id="summary-rows"></tbody>
@@ -345,16 +361,13 @@ const SORTED_PRODUCTS = [
   { ...PRODUCTS.find(p => p.shorts === '1.5K'), shorts: '1.5' },
 ].sort((a, b) => b.shorts.length - a.shorts.length);
 
-// Van load-in product order / Van出货录入产品顺序（仅显示常卖品）
-const VAN_LOAD_ORDER = ['C','WC','95','1.5K','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','GG','PG'];
-
-
 // ============================================================
 // 2. STATE / 应用状态
 // ============================================================
-let globalDiscount = 0;       // 0 | 2 | 4
-let paymentType    = 'cash';  // 'cash' | 'transfer' | 'cheque'
-let currentTab     = 'sales';
+let globalDiscount  = 0;       // 0 | 2 | 4
+let paymentType     = 'cash';  // 'cash' | 'transfer' | 'cheque'
+let currentTab      = 'sales';
+let selectedKeys = new Set();
 
 
 // ============================================================
@@ -820,34 +833,61 @@ function openHistory() {
 
 function renderHistoryPage() {
   if (!db) return;
-  const el  = document.getElementById('history-list-page');
-  const req = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
+  const el     = document.getElementById('history-list-page');
+  const filter = (document.getElementById('history-filter')?.value || '').toLowerCase().trim();
+  const req    = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
   req.onsuccess = e => {
-    const list = e.target.result.reverse();
+    let list = e.target.result.reverse();
+    if (filter) {
+      list = list.filter(inv =>
+        (inv.storeName || '').toLowerCase().includes(filter) ||
+        inv.invNum.toLowerCase().includes(filter)
+      );
+    }
     if (!list.length) {
-      el.innerHTML = `<p class="text-center text-gray-300 text-sm py-12">No saved invoices</p>`;
+      el.innerHTML = `<p class="text-center text-gray-300 text-sm py-12">${filter ? 'No matching invoices' : 'No saved invoices'}</p>`;
       return;
     }
     const badgeMap = {
-      cash:     `<span class="text-xs text-green-600 font-semibold">Cash</span>`,
-      transfer: `<span class="text-xs text-blue-500 font-semibold">Transfer</span>`,
-      cheque:   `<span class="text-xs text-yellow-600 font-semibold">Cheque</span>`,
+      cash:     `<span class="text-xs text-green-600 font-semibold">T·Cash</span>`,
+      transfer: `<span class="text-xs text-blue-500 font-semibold">E·Transfer</span>`,
+      cheque:   `<span class="text-xs text-orange-500 font-semibold">Q·Cheque</span>`,
     };
-    el.innerHTML = list.map(inv => {
-      const pt    = getInvPayType(inv);
-      const total = getInvTotal(inv).toFixed(2);
-      const badge = badgeMap[pt] || badgeMap.cash;
+    el.innerHTML = list.map((inv, idx) => {
+      const pt       = getInvPayType(inv);
+      const total    = getInvTotal(inv).toFixed(2);
+      const badge    = badgeMap[pt] || badgeMap.cash;
+      const store    = inv.storeName || '—';
+      const zebra    = idx % 2 === 1 ? 'style="background:#f8f9fa"' : '';
+      const selected = selectedKeys.has(inv.invNum);
+      const chkBg    = selected ? 'background:#2563eb;border-color:#2563eb' : 'background:white;border-color:#d1d5db';
+      const chkMark  = selected
+        ? `<svg width="10" height="10" viewBox="0 0 20 20" fill="white"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>`
+        : '';
       return `
-        <div class="flex items-center px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors"
-             onclick="viewSavedInvoice('${inv.invNum}')">
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-mono font-bold text-gray-800 truncate">${inv.invNum}</div>
-            <div class="flex items-center gap-1.5 mt-0.5">${badge}
+        <div class="flex items-center px-3 py-3 transition-colors" ${zebra}>
+          <div onclick="toggleSelect('${inv.invNum}')"
+            style="width:20px;height:20px;border-radius:5px;border:2px solid;${chkBg};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-right:10px;">
+            ${chkMark}
+          </div>
+          <div class="flex-1 min-w-0 cursor-pointer" onclick="viewSavedInvoice('${inv.invNum}')">
+            <div class="text-sm font-bold text-gray-800 truncate">${store}</div>
+            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              ${badge}
+              <span class="text-xs text-gray-400 font-mono">${inv.invNum}</span>
+              <span class="text-xs text-gray-300">·</span>
               <span class="text-xs text-gray-400">${inv.dateStr}</span>
             </div>
           </div>
-          <div class="text-base font-bold text-gray-700 ml-2">$${total}</div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300 ml-1"></i>
+          <div class="text-sm font-bold text-gray-700 ml-2 shrink-0">$${total}</div>
+          <button onclick="editInvoice('${inv.invNum}')"
+            class="ml-2 p-1.5 text-gray-300 hover:text-blue-500 btn-press shrink-0">
+            <i data-lucide="pencil" class="w-4 h-4"></i>
+          </button>
+          <button onclick="deleteInvoice('${inv.invNum}')"
+            class="ml-1 p-1.5 text-gray-300 hover:text-red-500 btn-press shrink-0">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
         </div>`;
     }).join('');
     lucide.createIcons();
@@ -864,6 +904,64 @@ function viewSavedInvoice(invNum) {
     _currentInvoiceData = inv;
     document.getElementById('invoice-modal').classList.remove('hidden');
   };
+}
+
+function editInvoice(invNum) {
+  if (!db) return;
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').get(invNum);
+  req.onsuccess = e => {
+    const inv = e.target.result;
+    if (!inv) return;
+    document.getElementById('order-input').value = inv.orderText || '';
+    globalDiscount = inv.globalDiscount || 0;
+    paymentType    = getInvPayType(inv);
+    renderControlButtons();
+    onTextareaInput();
+    switchTab('sales');
+  };
+}
+
+function deleteInvoice(invNum) {
+  if (!confirm(`Delete invoice ${invNum}?`)) return;
+  if (!db) return;
+  const tx = db.transaction('invoices', 'readwrite');
+  tx.objectStore('invoices').delete(invNum);
+  tx.oncomplete = () => {
+    selectedKeys.delete(invNum);
+    const count = selectedKeys.size;
+    document.getElementById('selected-count').textContent = count;
+    document.getElementById('history-summary-btn').classList.toggle('hidden', count === 0);
+    renderHistoryPage();
+  };
+}
+
+function toggleSelect(invNum) {
+  if (selectedKeys.has(invNum)) {
+    selectedKeys.delete(invNum);
+  } else {
+    selectedKeys.add(invNum);
+  }
+  const count = selectedKeys.size;
+  document.getElementById('selected-count').textContent = count;
+  document.getElementById('history-summary-btn').classList.toggle('hidden', count === 0);
+  renderHistoryPage();
+}
+
+function summarySelected() {
+  if (!db || !selectedKeys.size) return;
+  const keys    = [...selectedKeys];
+  const results = [];
+  let pending   = keys.length;
+  keys.forEach(invNum => {
+    const req = db.transaction('invoices', 'readonly').objectStore('invoices').get(invNum);
+    req.onsuccess = e => {
+      if (e.target.result) results.push(e.target.result);
+      if (--pending === 0) {
+        results.sort((a, b) => a.invNum.localeCompare(b.invNum));
+        renderSummaryModal(results, null, null);
+      }
+    };
+  });
 }
 
 
@@ -1155,19 +1253,20 @@ function renderInventoryTable(invoices) {
   }
 
   el.innerHTML = `
-    <div class="flex items-center py-1.5 border-b border-gray-200 text-xs text-gray-400 font-medium">
+    <div class="flex items-center py-1.5 border-b border-gray-200 text-xs text-gray-400 font-medium bg-white">
       <span class="flex-1">Product</span>
       <span class="w-10 text-center">Out</span>
       <span class="w-10 text-center">Sold</span>
       <span class="w-10 text-right">Left</span>
     </div>` +
-  loaded.map(p => {
+  loaded.map((p, idx) => {
     const loadedQty = getLoadedTotal(loadIn, p);
     const soldQty   = sold[p.shorts] || 0;
     const left      = loadedQty - soldQty;
     const leftCls   = left < 0 ? 'text-red-500' : left === 0 ? 'text-gray-400' : 'text-green-600';
+    const zebra     = idx % 2 === 1 ? 'style="background:#f8f9fa"' : '';
     return `
-      <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
+      <div class="flex items-center py-2 border-b border-gray-50 last:border-0" ${zebra}>
         <span class="flex-1 text-xs font-mono font-bold text-blue-600 pr-1">${p.shorts}</span>
         <span class="w-10 text-center text-sm text-gray-500">${loadedQty}</span>
         <span class="w-10 text-center text-sm text-gray-500">${soldQty}</span>
@@ -1182,83 +1281,102 @@ function generateSummary() {
   getTodayInvoices(invoices => {
     const loadIn = getLoadIn();
     const sold   = calcSoldQty(invoices);
+    renderSummaryModal(invoices, loadIn, sold);
+  });
+}
 
-    const d       = new Date();
-    const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-    document.getElementById('summary-date-title').textContent = dateStr;
+function renderSummaryModal(invoices, loadIn, sold) {
+  const d       = new Date();
+  const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  document.getElementById('summary-date-title').textContent = dateStr;
+  document.getElementById('summary-total-count').textContent = `(共 ${invoices.length} 笔)`;
 
-    const totals   = { cash: 0, transfer: 0, cheque: 0 };
-    const PTLabel  = { cash: 'T', transfer: 'E', cheque: 'Q' };
-    const PTColor  = { cash: 'text-green-600', transfer: 'text-blue-600', cheque: 'text-orange-500' };
+  const PTLabel = { cash: 'T', transfer: 'E', cheque: 'Q' };
+  const PTColor = { cash: 'text-green-600', transfer: 'text-blue-600', cheque: 'text-orange-500' };
+  const PTBg    = { cash: '#f0fdf4', transfer: '#eff6ff', cheque: '#fff7ed' };
+  const PTText  = { cash: '#15803d', transfer: '#1d4ed8', cheque: '#c2410c' };
+  const PTTitle = { cash: 'Total T (Cash)', transfer: 'Total E (Transfer)', cheque: 'Total Q (Cheque)' };
 
-    const tbody = document.getElementById('summary-rows');
-    tbody.innerHTML = '';
-    const textLines = [`=== Day Summary · ${dateStr} ===`, `${'Store'.padEnd(22)} ${'Amount'.padStart(9)}  T/E/Q`, '-'.repeat(38)];
+  const groups = { cash: [], transfer: [], cheque: [] };
+  invoices.forEach(inv => { const pt = getInvPayType(inv); if (groups[pt]) groups[pt].push(inv); });
 
-    invoices.forEach(inv => {
-      const pt    = getInvPayType(inv);
+  const tbody = document.getElementById('summary-rows');
+  tbody.innerHTML = '';
+  const textLines = [
+    `=== Day Summary · ${dateStr} (共 ${invoices.length} 笔) ===`,
+    `${'#'.padEnd(3)}${'Store'.padEnd(22)} ${'Amount'.padStart(9)}  T/E/Q`,
+    '-'.repeat(42),
+  ];
+
+  let rowIdx = 0;
+  let grandTotal = 0;
+
+  ['cash', 'transfer', 'cheque'].forEach(pt => {
+    const group = groups[pt];
+    if (!group.length) return;
+
+    let groupTotal = 0;
+    group.forEach(inv => {
+      rowIdx++;
       const amt   = getInvTotal(inv);
-      totals[pt] += amt;
-      const label = PTLabel[pt];
+      groupTotal += amt;
       const store = inv.storeName || '—';
+      const label = PTLabel[pt];
+      const bg    = rowIdx % 2 === 0 ? '#f8f9fa' : '#ffffff';
       const tr = document.createElement('tr');
-      tr.className = 'border-b border-gray-100';
+      tr.style.background = bg;
       tr.innerHTML = `
-        <td class="py-1 text-gray-800">${store}</td>
-        <td class="py-1 text-right font-mono">$${amt.toFixed(2)}</td>
-        <td class="py-1 text-right font-bold ${PTColor[pt]}">${label}</td>`;
+        <td class="py-1.5 pl-1 text-xs text-gray-400 w-7">${rowIdx}</td>
+        <td class="py-1.5 text-gray-800 font-medium">${store}</td>
+        <td class="py-1.5 text-right font-mono font-bold">$${amt.toFixed(2)}</td>
+        <td class="py-1.5 text-right font-bold w-8 ${PTColor[pt]}">${label}</td>`;
       tbody.appendChild(tr);
-      textLines.push(`${store.padEnd(22)} $${amt.toFixed(2).padStart(8)}  ${label}`);
+      textLines.push(`${String(rowIdx).padEnd(3)}${store.padEnd(22)} $${amt.toFixed(2).padStart(8)}  ${label}`);
     });
 
-    // Footer rows
-    const tfoot = document.getElementById('summary-foot');
-    tfoot.innerHTML = '';
-    textLines.push('-'.repeat(38));
-
-    const addFootRow = (label, amt, colorCls) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="pt-2 text-xs text-gray-500 font-semibold" colspan="2">${label}</td>
-        <td class="pt-2 text-right font-mono font-semibold ${colorCls}">$${amt.toFixed(2)}</td>`;
-      tfoot.appendChild(tr);
-      textLines.push(`${label.padEnd(22)} $${amt.toFixed(2).padStart(8)}`);
-    };
-
-    if (totals.cash > 0)     addFootRow('Total T (Cash)',     totals.cash,     'text-green-600');
-    if (totals.transfer > 0) addFootRow('Total E (Transfer)', totals.transfer, 'text-blue-600');
-    if (totals.cheque > 0)   addFootRow('Total Q (Cheque)',   totals.cheque,   'text-orange-500');
-
-    const grandTotal = totals.cash + totals.transfer + totals.cheque;
-    const gtr = document.createElement('tr');
-    gtr.className = 'border-t-2 border-gray-300';
-    gtr.innerHTML = `
-      <td class="pt-2 font-bold text-gray-900" colspan="2">Grand Total</td>
-      <td class="pt-2 text-right font-mono font-bold text-gray-900">$${grandTotal.toFixed(2)}</td>`;
-    tfoot.appendChild(gtr);
-    textLines.push('='.repeat(38));
-    textLines.push(`${'Grand Total'.padEnd(22)} $${grandTotal.toFixed(2).padStart(8)}`);
-
-    // Inventory section in clipboard text — use shortcodes
-    if (loadIn) {
-      textLines.push('', 'INVENTORY');
-      const ordered = [
-        ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
-        ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
-      ].filter(p => getLoadedTotal(loadIn, p) > 0);
-      ordered.forEach(p => {
-        const loadedQty = getLoadedTotal(loadIn, p);
-        const soldQty   = sold[p.shorts] || 0;
-        const left      = loadedQty - soldQty;
-        textLines.push(`${p.shorts.padEnd(8)} Out:${String(loadedQty).padStart(3)}  Sold:${String(soldQty).padStart(3)}  Left:${String(left).padStart(3)}`);
-      });
-    }
-
-    textLines.push('', '— My Sales Calc');
-    document.getElementById('summary-text').value = textLines.join('\n');
-    document.getElementById('summary-modal').classList.remove('hidden');
-    lucide.createIcons();
+    grandTotal += groupTotal;
+    const sub = document.createElement('tr');
+    sub.style.background = PTBg[pt];
+    sub.innerHTML = `
+      <td class="py-1 pl-1 text-xs" colspan="2">
+        <span style="color:${PTText[pt]};font-weight:600;font-size:11px;">${PTTitle[pt]}</span>
+      </td>
+      <td class="py-1 text-right font-mono font-semibold text-xs" style="color:${PTText[pt]};">$${groupTotal.toFixed(2)}</td>
+      <td></td>`;
+    tbody.appendChild(sub);
+    textLines.push(`   ${PTTitle[pt].padEnd(22)} $${groupTotal.toFixed(2).padStart(8)}`);
   });
+
+  const tfoot = document.getElementById('summary-foot');
+  tfoot.innerHTML = '';
+  const gtr = document.createElement('tr');
+  gtr.style.cssText = 'border-top:2px solid #d1d5db;background:#f3f4f6;';
+  gtr.innerHTML = `
+    <td class="py-2 pl-1 font-bold text-gray-900 text-base" colspan="2">Grand Total</td>
+    <td class="py-2 text-right font-mono font-bold text-gray-900 text-base">$${grandTotal.toFixed(2)}</td>
+    <td></td>`;
+  tfoot.appendChild(gtr);
+  textLines.push('='.repeat(42));
+  textLines.push(`${'Grand Total'.padEnd(25)} $${grandTotal.toFixed(2).padStart(9)}`);
+
+  if (loadIn && sold) {
+    textLines.push('', 'INVENTORY');
+    const ordered = [
+      ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
+      ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+    ].filter(p => getLoadedTotal(loadIn, p) > 0);
+    ordered.forEach(p => {
+      const loadedQty = getLoadedTotal(loadIn, p);
+      const soldQty   = sold[p.shorts] || 0;
+      const left      = loadedQty - soldQty;
+      textLines.push(`${p.shorts.padEnd(8)} Out:${String(loadedQty).padStart(3)}  Sold:${String(soldQty).padStart(3)}  Left:${String(left).padStart(3)}`);
+    });
+  }
+
+  textLines.push('', '— My Sales Calc');
+  document.getElementById('summary-text').value = textLines.join('\n');
+  document.getElementById('summary-modal').classList.remove('hidden');
+  lucide.createIcons();
 }
 
 function closeSummaryModal() {
