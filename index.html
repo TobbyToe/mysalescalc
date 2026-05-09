@@ -929,14 +929,16 @@ function openHistory() {
 function renderHistoryPage() {
   if (!db) return;
   const el     = document.getElementById('history-list-page');
-  const filter = (document.getElementById('history-filter')?.value || '').toLowerCase().trim();
+  const filterRaw = (document.getElementById('history-filter')?.value || '').trim();
+  const normalize = s => s.toLowerCase().replace(/[\s\-_'.&]+/g, '');
+  const filterNorm = normalize(filterRaw);
   const req    = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
   req.onsuccess = e => {
     let list = e.target.result.reverse();
-    if (filter) {
+    if (filterNorm) {
       list = list.filter(inv =>
-        (inv.storeName || '').toLowerCase().includes(filter) ||
-        inv.invNum.toLowerCase().includes(filter)
+        normalize(inv.storeName || '').includes(filterNorm) ||
+        normalize(inv.invNum).includes(filterNorm)
       );
     }
     if (!list.length) {
