@@ -1709,6 +1709,7 @@ async function downloadOrShare(blob, filename, title, text) {
   const a   = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+  setTimeout(() => alert(`✓ Saved: ${filename}\n\nCheck your Downloads folder.`), 300);
 }
 
 function exportCSV() {
@@ -1738,21 +1739,30 @@ function exportPDF() {
 
 function buildShareText(invoices) {
   const PTLabel = { cash: 'T', transfer: 'E', cheque: 'Q' };
-  let text = `=== Invoice Summary ===\n`;
+  const d = new Date();
+  const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+
   const totals = { cash: 0, transfer: 0, cheque: 0 };
-  invoices.forEach(inv => {
-    const pt  = getInvPayType(inv);
-    const amt = getInvTotal(inv);
+  let md = `**Invoice Summary · ${dateStr}**\n\n`;
+  md += `| # | Store | Amount | Pay |\n`;
+  md += `|---|-------|-------:|:---:|\n`;
+
+  invoices.forEach((inv, i) => {
+    const pt    = getInvPayType(inv);
+    const amt   = getInvTotal(inv);
     totals[pt] += amt;
-    text += `${(inv.storeName || '—').padEnd(20)} $${amt.toFixed(2).padStart(7)}  ${PTLabel[pt]}\n`;
+    const store = (inv.storeName || '—').replace(/\|/g, '/');
+    md += `| ${i + 1} | ${store} | $${amt.toFixed(2)} | ${PTLabel[pt] || '?'} |\n`;
   });
+
   const grand = totals.cash + totals.transfer + totals.cheque;
-  if (totals.cash > 0)     text += `\nTotal T (Cash):     $${totals.cash.toFixed(2)}`;
-  if (totals.transfer > 0) text += `\nTotal E (Transfer): $${totals.transfer.toFixed(2)}`;
-  if (totals.cheque > 0)   text += `\nTotal Q (Cheque):   $${totals.cheque.toFixed(2)}`;
-  text += `\nGrand Total:        $${grand.toFixed(2)}`;
-  text += '\n\n— My Sales Calc';
-  return text;
+  md += '\n';
+  if (totals.cash > 0)     md += `**Total T (Cash):** $${totals.cash.toFixed(2)}\n`;
+  if (totals.transfer > 0) md += `**Total E (Transfer):** $${totals.transfer.toFixed(2)}\n`;
+  if (totals.cheque > 0)   md += `**Total Q (Cheque):** $${totals.cheque.toFixed(2)}\n`;
+  md += `**Grand Total:** $${grand.toFixed(2)}\n`;
+  md += '\n*— My Sales Calc*';
+  return md;
 }
 
 function shareSelected() {
