@@ -37,19 +37,34 @@
 <body class="bg-gray-50 min-h-screen">
 
 <!-- ============================================================ -->
+<!-- TOP TAB NAVIGATION / 顶部导航栏                                 -->
+<!-- ============================================================ -->
+<nav class="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 no-print" style="z-index:40;">
+  <div class="max-w-lg mx-auto flex">
+    <button id="tab-sales" onclick="switchTab('sales')"
+      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-blue-600 border-b-2 border-blue-600 btn-press">
+      <i data-lucide="calculator" class="w-5 h-5"></i>
+      <span class="text-xs font-semibold">Sales</span>
+    </button>
+    <button id="tab-van" onclick="switchTab('van')"
+      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
+      <i data-lucide="truck" class="w-5 h-5"></i>
+      <span class="text-xs font-medium">Van</span>
+    </button>
+    <button id="tab-history" onclick="switchTab('history')"
+      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
+      <i data-lucide="clock" class="w-5 h-5"></i>
+      <span class="text-xs font-medium">History</span>
+    </button>
+  </div>
+</nav>
+
+
+<!-- ============================================================ -->
 <!-- SALES PAGE / 销售计算器                                         -->
 <!-- v1: original invoice calculator                              -->
 <!-- ============================================================ -->
-<div id="sales-page" class="max-w-lg mx-auto px-3 py-4 pb-24">
-
-  <!-- Top bar / 顶部栏 -->
-  <div class="flex items-center justify-between mb-3">
-    <h1 class="text-xl font-bold text-gray-800 tracking-tight">My Sales Calc</h1>
-    <button onclick="openHistory()"
-      class="flex items-center gap-1 text-blue-600 text-sm font-medium btn-press">
-      <i data-lucide="clock" class="w-4 h-4"></i> History
-    </button>
-  </div>
+<div id="sales-page" class="max-w-lg mx-auto px-3 pt-16 pb-4">
 
   <!-- Order textarea card / 订单输入卡片 -->
   <div class="bg-white rounded-2xl shadow-sm px-4 pt-3 pb-2 mb-1">
@@ -128,7 +143,7 @@
 <!-- VAN SALES PAGE / 车销管理                                       -->
 <!-- v2: morning load-in, settlement, inventory                   -->
 <!-- ============================================================ -->
-<div id="van-page" class="hidden max-w-lg mx-auto px-3 py-4 pb-24">
+<div id="van-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
 
   <!-- Header / 标题行 -->
   <div class="flex items-center justify-between mb-3">
@@ -184,20 +199,12 @@
 
 
 <!-- ============================================================ -->
-<!-- BOTTOM TAB NAVIGATION / 底部导航栏                             -->
+<!-- HISTORY PAGE / 历史记录页                                       -->
 <!-- ============================================================ -->
-<nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex no-print" style="z-index:40;">
-  <button id="tab-sales" onclick="switchTab('sales')"
-    class="flex-1 py-3 flex flex-col items-center gap-0.5 text-blue-600 btn-press">
-    <i data-lucide="calculator" class="w-5 h-5"></i>
-    <span class="text-xs font-medium">Sales</span>
-  </button>
-  <button id="tab-van" onclick="switchTab('van')"
-    class="flex-1 py-3 flex flex-col items-center gap-0.5 text-gray-400 btn-press">
-    <i data-lucide="truck" class="w-5 h-5"></i>
-    <span class="text-xs font-medium">Van</span>
-  </button>
-</nav>
+<div id="history-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
+  <h1 class="text-xl font-bold text-gray-800 tracking-tight mb-3">Invoice History</h1>
+  <div id="history-list-page" class="bg-white rounded-2xl shadow-sm overflow-hidden divide-y divide-gray-50"></div>
+</div>
 
 
 <!-- ============================================================ -->
@@ -229,21 +236,6 @@
 </div>
 
 
-<!-- ============================================================ -->
-<!-- HISTORY MODAL / 历史记录                                        -->
-<!-- ============================================================ -->
-<div id="history-modal"
-  class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-end sm:items-center justify-center" style="z-index:50;">
-  <div class="bg-white w-full sm:max-w-md sm:rounded-2xl flex flex-col max-h-screen sm:max-h-4/5 rounded-t-2xl">
-    <div class="flex items-center justify-between px-4 py-3 border-b shrink-0">
-      <span class="font-bold text-gray-800">Invoice History</span>
-      <button onclick="closeHistory()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
-        <i data-lucide="x" class="w-5 h-5"></i>
-      </button>
-    </div>
-    <div id="history-list" class="overflow-y-auto flex-1 divide-y divide-gray-50"></div>
-  </div>
-</div>
 
 
 <!-- ============================================================ -->
@@ -339,6 +331,9 @@ const SORTED_PRODUCTS = [
   ...PRODUCTS,
   { ...PRODUCTS.find(p => p.shorts === '1.5K'), shorts: '1.5' },
 ].sort((a, b) => b.shorts.length - a.shorts.length);
+
+// Van load-in product order / Van出货录入产品顺序（仅显示常卖品）
+const VAN_LOAD_ORDER = ['C','WC','95','1.5K','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','GG','PG'];
 
 
 // ============================================================
@@ -807,17 +802,12 @@ function getInvTotal(inv) {
 }
 
 function openHistory() {
-  document.getElementById('history-modal').classList.remove('hidden');
-  renderHistory();
+  switchTab('history');
 }
 
-function closeHistory() {
-  document.getElementById('history-modal').classList.add('hidden');
-}
-
-function renderHistory() {
+function renderHistoryPage() {
   if (!db) return;
-  const el  = document.getElementById('history-list');
+  const el  = document.getElementById('history-list-page');
   const req = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
   req.onsuccess = e => {
     const list = e.target.result.reverse();
@@ -928,16 +918,18 @@ function getTodayDateStr() {
 
 function switchTab(tab) {
   currentTab = tab;
-  document.getElementById('sales-page').classList.toggle('hidden', tab !== 'sales');
-  document.getElementById('van-page').classList.toggle('hidden', tab !== 'van');
+  document.getElementById('sales-page').classList.toggle('hidden',   tab !== 'sales');
+  document.getElementById('van-page').classList.toggle('hidden',     tab !== 'van');
+  document.getElementById('history-page').classList.toggle('hidden', tab !== 'history');
 
-  const base   = 'flex-1 py-3 flex flex-col items-center gap-0.5 btn-press';
-  document.getElementById('tab-sales').className = tab === 'sales'
-    ? `${base} text-blue-600` : `${base} text-gray-400`;
-  document.getElementById('tab-van').className = tab === 'van'
-    ? `${base} text-blue-600` : `${base} text-gray-400`;
+  const active   = 'flex-1 py-2.5 flex flex-col items-center gap-0.5 text-blue-600 border-b-2 border-blue-600 btn-press';
+  const inactive = 'flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press';
+  document.getElementById('tab-sales').className   = tab === 'sales'   ? active : inactive;
+  document.getElementById('tab-van').className     = tab === 'van'     ? active : inactive;
+  document.getElementById('tab-history').className = tab === 'history' ? active : inactive;
 
-  if (tab === 'van') renderVanPage();
+  if (tab === 'van')     renderVanPage();
+  if (tab === 'history') renderHistoryPage();
 }
 
 // --- Load-In / 出货录入 ---
@@ -957,7 +949,8 @@ function renderLoadInForm() {
   document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
 
   const form = document.getElementById('load-in-form');
-  form.innerHTML = PRODUCTS.map(p => {
+  const vanProducts = VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean);
+  form.innerHTML = vanProducts.map(p => {
     const qty   = loadIn ? (loadIn[p.shorts] || '') : '';
     const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
     return `
@@ -1079,7 +1072,7 @@ function renderInventoryTable(invoices) {
   }
 
   const sold   = calcSoldQty(invoices);
-  const loaded = PRODUCTS.filter(p => (loadIn[p.shorts] || 0) > 0);
+  const loaded = VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(p => p && (loadIn[p.shorts] || 0) > 0);
 
   if (!loaded.length) {
     el.innerHTML = '<p class="text-xs text-gray-300 text-center py-3">No products loaded today</p>';
@@ -1139,7 +1132,7 @@ function generateSummary() {
 
     if (loadIn) {
       text += `\nINVENTORY\n`;
-      PRODUCTS.filter(p => (loadIn[p.shorts] || 0) > 0).forEach(p => {
+      VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(p => p && (loadIn[p.shorts] || 0) > 0).forEach(p => {
         const loadedQty = loadIn[p.shorts];
         const soldQty   = sold[p.shorts] || 0;
         const left      = loadedQty - soldQty;
