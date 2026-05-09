@@ -745,8 +745,8 @@ function saveAndClose() {
   saveInvoiceToDB(_currentInvoiceData, () => {
     alert(`Saved: ${_currentInvoiceData.invNum}`);
     closeModal();
-    // Refresh van page if active / 如在Van页则刷新
-    if (currentTab === 'van') renderVanPage();
+    if (currentTab === 'van')     renderVanPage();
+    if (currentTab === 'history') renderHistoryPage();
   });
 }
 
@@ -849,7 +849,6 @@ function viewSavedInvoice(invNum) {
     if (!inv) return;
     document.getElementById('invoice-content').innerHTML = inv.html;
     _currentInvoiceData = inv;
-    closeHistory();
     document.getElementById('invoice-modal').classList.remove('hidden');
   };
 }
@@ -934,6 +933,9 @@ function switchTab(tab) {
 
 // --- Load-In / 出货录入 ---
 
+// Priority order for the load-in form / 出货录入的产品显示顺序
+const VAN_ORDER = ['C','WC','95','1.5K','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','GG','PG','J','P','S','VS','M','B'];
+
 const LOAD_IN_KEY = () => `loadIn_${getTodayPrefix()}`;
 
 function getLoadIn() {
@@ -948,9 +950,14 @@ function renderLoadInForm() {
   document.getElementById('btn-edit-load').classList.toggle('hidden', !isSet);
   document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
 
+  // Priority first, then remaining products / 优先列表在前，其余产品在后
+  const ordered = [
+    ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
+    ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+  ];
+
   const form = document.getElementById('load-in-form');
-  const vanProducts = VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean);
-  form.innerHTML = vanProducts.map(p => {
+  form.innerHTML = ordered.map(p => {
     const qty   = loadIn ? (loadIn[p.shorts] || '') : '';
     const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
     return `
