@@ -56,6 +56,11 @@
       <i data-lucide="clock" class="w-5 h-5"></i>
       <span class="text-xs font-medium">History</span>
     </button>
+    <button id="tab-expenses" onclick="switchTab('expenses')"
+      class="flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press">
+      <i data-lucide="receipt" class="w-5 h-5"></i>
+      <span class="text-xs font-medium">Expenses</span>
+    </button>
   </div>
 </nav>
 
@@ -220,6 +225,71 @@
 
 
 <!-- ============================================================ -->
+<!-- EXPENSES PAGE / 日常报销                                        -->
+<!-- ============================================================ -->
+<div id="expenses-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-6">
+  <h1 class="text-xl font-bold text-gray-800 tracking-tight mb-3">Expenses / 今日报销</h1>
+  <div class="bg-white rounded-2xl shadow-sm px-4 py-4 space-y-5">
+
+    <!-- Lunch -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+        <i data-lucide="utensils" class="w-5 h-5 text-orange-400"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-xs text-gray-500 font-semibold mb-1">Lunch / 午餐</div>
+        <div class="flex items-center border-b border-gray-200 focus-within:border-blue-400 pb-1">
+          <span class="text-gray-400 text-sm mr-1">$</span>
+          <input id="exp-lunch" type="number" step="0.01" min="0" placeholder="0.00"
+            class="flex-1 text-sm font-mono font-bold border-0 focus:outline-none bg-transparent"
+            oninput="saveExpenses()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Petrol -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+        <i data-lucide="fuel" class="w-5 h-5 text-blue-400"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-xs text-gray-500 font-semibold mb-1">Petrol / 汽油</div>
+        <div class="flex items-center border-b border-gray-200 focus-within:border-blue-400 pb-1">
+          <span class="text-gray-400 text-sm mr-1">$</span>
+          <input id="exp-petrol" type="number" step="0.01" min="0" placeholder="0.00"
+            class="flex-1 text-sm font-mono font-bold border-0 focus:outline-none bg-transparent"
+            oninput="saveExpenses()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Others -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+        <i data-lucide="package-2" class="w-5 h-5 text-purple-400"></i>
+      </div>
+      <div class="flex-1">
+        <div class="text-xs text-gray-500 font-semibold mb-1">Others / 其他</div>
+        <div class="flex items-center border-b border-gray-200 focus-within:border-blue-400 pb-1">
+          <span class="text-gray-400 text-sm mr-1">$</span>
+          <input id="exp-others" type="number" step="0.01" min="0" placeholder="0.00"
+            class="flex-1 text-sm font-mono font-bold border-0 focus:outline-none bg-transparent"
+            oninput="saveExpenses()">
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Total -->
+  <div class="bg-blue-50 rounded-2xl px-4 py-3 mt-3 flex items-center justify-between">
+    <span class="text-sm font-semibold text-blue-700">Total Expenses</span>
+    <span id="exp-total" class="text-lg font-mono font-bold text-blue-700">$0.00</span>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
 <!-- INVOICE MODAL / 发票预览（全屏）                                 -->
 <!-- ============================================================ -->
 <div id="invoice-modal"
@@ -265,13 +335,13 @@
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
-    <div class="overflow-auto max-h-80">
+    <div class="overflow-auto max-h-56">
       <table class="w-full text-sm border-collapse">
         <thead>
           <tr class="border-b-2 border-gray-200 text-xs text-gray-500 bg-white">
             <th class="text-left pb-2 font-semibold w-7">#</th>
             <th class="text-left pb-2 font-semibold">Store</th>
-            <th class="text-right pb-2 font-semibold">Amount</th>
+            <th class="text-right pb-2 font-semibold font-mono">Amount</th>
             <th class="text-right pb-2 font-semibold w-8">T/E/Q</th>
           </tr>
         </thead>
@@ -279,6 +349,8 @@
         <tfoot id="summary-foot"></tfoot>
       </table>
     </div>
+    <!-- Audit / 对账框 -->
+    <div id="summary-audit" class="hidden mt-3 pt-3 border-t-2 border-dashed border-gray-200 text-sm font-mono"></div>
     <textarea id="summary-text" readonly aria-hidden="true"
       class="opacity-0 absolute w-0 h-0 overflow-hidden" tabindex="-1"></textarea>
     <button onclick="copySummary()"
@@ -367,7 +439,8 @@ const SORTED_PRODUCTS = [
 let globalDiscount  = 0;       // 0 | 2 | 4
 let paymentType     = 'cash';  // 'cash' | 'transfer' | 'cheque'
 let currentTab      = 'sales';
-let selectedKeys = new Set();
+let selectedKeys    = new Set();
+let expenses        = { lunch: 0, petrol: 0, others: 0 };
 
 
 // ============================================================
@@ -1028,19 +1101,22 @@ function getTodayDateStr() {
 
 function switchTab(tab) {
   currentTab = tab;
-  document.getElementById('sales-page').classList.toggle('hidden',   tab !== 'sales');
-  document.getElementById('van-page').classList.toggle('hidden',     tab !== 'van');
-  document.getElementById('history-page').classList.toggle('hidden', tab !== 'history');
+  document.getElementById('sales-page').classList.toggle('hidden',    tab !== 'sales');
+  document.getElementById('van-page').classList.toggle('hidden',      tab !== 'van');
+  document.getElementById('history-page').classList.toggle('hidden',  tab !== 'history');
+  document.getElementById('expenses-page').classList.toggle('hidden', tab !== 'expenses');
   document.getElementById('van-action-bar').classList.toggle('hidden', tab !== 'van');
 
   const active   = 'flex-1 py-2.5 flex flex-col items-center gap-0.5 text-blue-600 border-b-2 border-blue-600 btn-press';
   const inactive = 'flex-1 py-2.5 flex flex-col items-center gap-0.5 text-gray-400 border-b-2 border-transparent btn-press';
-  document.getElementById('tab-sales').className   = tab === 'sales'   ? active : inactive;
-  document.getElementById('tab-van').className     = tab === 'van'     ? active : inactive;
-  document.getElementById('tab-history').className = tab === 'history' ? active : inactive;
+  document.getElementById('tab-sales').className    = tab === 'sales'    ? active : inactive;
+  document.getElementById('tab-van').className      = tab === 'van'      ? active : inactive;
+  document.getElementById('tab-history').className  = tab === 'history'  ? active : inactive;
+  document.getElementById('tab-expenses').className = tab === 'expenses' ? active : inactive;
 
-  if (tab === 'van')     renderVanPage();
-  if (tab === 'history') renderHistoryPage();
+  if (tab === 'van')      renderVanPage();
+  if (tab === 'history')  renderHistoryPage();
+  if (tab === 'expenses') renderExpensesPage();
 }
 
 // --- Load-In / 出货录入 ---
@@ -1375,6 +1451,49 @@ function renderSummaryModal(invoices, loadIn, sold) {
   }
 
   textLines.push('', '— My Sales Calc');
+
+  // ── Audit / 对账框 ──────────────────────────────────────────
+  const auditEl  = document.getElementById('summary-audit');
+  const totalExp = expenses.lunch + expenses.petrol + expenses.others;
+  const cashOnly = groups.cash.reduce((s, inv) => s + getInvTotal(inv), 0);
+  const netCash  = cashOnly - totalExp;
+  const rounded   = Math.round(netCash * 2) / 2; // nearest $0.50
+
+  const row = (label, val, cls) =>
+    `<div style="display:flex;justify-content:space-between;padding:2px 0;">
+       <span style="color:#6b7280;">${label}</span>
+       <span class="${cls}" style="font-weight:700;">${val}</span>
+     </div>`;
+
+  let auditHtml = `
+    <div style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">
+      Audit / 对账
+    </div>`;
+  auditHtml += row('Cash Sales (T)', `$${cashOnly.toFixed(2)}`, 'text-green-600');
+  if (expenses.lunch  > 0) auditHtml += row('  · Lunch',  `-$${expenses.lunch.toFixed(2)}`,  'text-red-500');
+  if (expenses.petrol > 0) auditHtml += row('  · Petrol', `-$${expenses.petrol.toFixed(2)}`, 'text-red-500');
+  if (expenses.others > 0) auditHtml += row('  · Others', `-$${expenses.others.toFixed(2)}`, 'text-red-500');
+  if (totalExp > 0) {
+    auditHtml += `<div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>`;
+    auditHtml += row('Total Expenses', `-$${totalExp.toFixed(2)}`, 'text-red-600');
+  }
+  auditHtml += `<div style="border-top:2px solid #d1d5db;margin:6px 0;"></div>`;
+  auditHtml += row('Net Cash', `$${netCash.toFixed(2)}`, 'text-gray-900');
+  auditHtml += row('Rounded (÷ $0.50)', `$${rounded.toFixed(2)}`, 'text-blue-700');
+
+  auditEl.innerHTML = auditHtml;
+  auditEl.classList.remove('hidden');
+
+  // append audit to clipboard text
+  textLines.push('', '─── Audit ───────────────────────────');
+  textLines.push(`${'Cash Sales (T)'.padEnd(22)} $${cashOnly.toFixed(2).padStart(8)}`);
+  if (expenses.lunch  > 0) textLines.push(`${'  Lunch'.padEnd(22)} -$${expenses.lunch.toFixed(2).padStart(7)}`);
+  if (expenses.petrol > 0) textLines.push(`${'  Petrol'.padEnd(22)} -$${expenses.petrol.toFixed(2).padStart(7)}`);
+  if (expenses.others > 0) textLines.push(`${'  Others'.padEnd(22)} -$${expenses.others.toFixed(2).padStart(7)}`);
+  if (totalExp > 0)        textLines.push(`${'Total Expenses'.padEnd(22)} -$${totalExp.toFixed(2).padStart(7)}`);
+  textLines.push(`${'Net Cash'.padEnd(22)} $${netCash.toFixed(2).padStart(8)}`);
+  textLines.push(`${'Rounded (÷ $0.50)'.padEnd(22)} $${rounded.toFixed(2).padStart(8)}`);
+
   document.getElementById('summary-text').value = textLines.join('\n');
   document.getElementById('summary-modal').classList.remove('hidden');
   lucide.createIcons();
@@ -1405,10 +1524,41 @@ function clearDay() {
 
 
 // ============================================================
-// 15. INIT / 初始化
+// 15. EXPENSES / 报销管理
+// ============================================================
+function loadExpenses() {
+  try {
+    const saved = localStorage.getItem('expenses_v1');
+    if (saved) expenses = { lunch: 0, petrol: 0, others: 0, ...JSON.parse(saved) };
+  } catch(e) {}
+}
+
+function saveExpenses() {
+  expenses = {
+    lunch:  Math.max(0, parseFloat(document.getElementById('exp-lunch').value)  || 0),
+    petrol: Math.max(0, parseFloat(document.getElementById('exp-petrol').value) || 0),
+    others: Math.max(0, parseFloat(document.getElementById('exp-others').value) || 0),
+  };
+  localStorage.setItem('expenses_v1', JSON.stringify(expenses));
+  const total = expenses.lunch + expenses.petrol + expenses.others;
+  document.getElementById('exp-total').textContent = `$${total.toFixed(2)}`;
+}
+
+function renderExpensesPage() {
+  document.getElementById('exp-lunch').value  = expenses.lunch  || '';
+  document.getElementById('exp-petrol').value = expenses.petrol || '';
+  document.getElementById('exp-others').value = expenses.others || '';
+  const total = expenses.lunch + expenses.petrol + expenses.others;
+  document.getElementById('exp-total').textContent = `$${total.toFixed(2)}`;
+}
+
+
+// ============================================================
+// 16. INIT / 初始化
 // ============================================================
 initDB(() => {
   loadPersistedState();
+  loadExpenses();
   lucide.createIcons();
 });
 </script>
