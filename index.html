@@ -215,7 +215,13 @@
 <div id="history-page" class="hidden max-w-lg mx-auto px-3 pt-16 pb-4">
   <div class="flex items-center justify-between mb-2">
     <h1 class="text-xl font-bold text-gray-800 tracking-tight">Invoice History</h1>
-    <span id="sel-label" class="hidden text-xs text-gray-400 font-mono"></span>
+    <div class="flex items-center gap-2">
+      <span id="sel-label" class="hidden text-xs text-gray-400 font-mono"></span>
+      <button onclick="exportAllCSV()"
+        class="text-xs text-gray-500 btn-press border border-gray-200 px-2 py-1 rounded-lg">All CSV</button>
+      <button onclick="exportAllJSON()"
+        class="text-xs text-gray-500 btn-press border border-gray-200 px-2 py-1 rounded-lg">All JSON</button>
+    </div>
   </div>
 
   <!-- Selection action bar — shown when ≥1 item selected -->
@@ -356,6 +362,34 @@
 </div>
 
 
+
+
+<!-- ============================================================ -->
+<!-- EXPORT MODAL / 单笔发票导出                                      -->
+<!-- ============================================================ -->
+<div id="export-modal"
+  class="fixed inset-0 hidden bg-black bg-opacity-60 flex items-center justify-center px-4" style="z-index:60;">
+  <div class="bg-white w-full max-w-md rounded-2xl p-4 flex flex-col" style="max-height:82vh;">
+    <div class="flex items-center justify-between mb-3 shrink-0">
+      <span class="font-bold text-gray-800">商家档案 / Invoice Record</span>
+      <button onclick="closeExportModal()" class="text-gray-400 hover:text-gray-600 btn-press p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <textarea id="export-text" readonly
+      class="flex-1 text-xs font-mono border border-gray-100 rounded-xl p-3 resize-none bg-gray-50"></textarea>
+    <div class="flex gap-2 mt-3 shrink-0">
+      <button onclick="copyExportText()"
+        class="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm btn-press">
+        📋 Copy Text
+      </button>
+      <button onclick="copyVisitNote()"
+        class="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm btn-press">
+        🗒 Visit Note
+      </button>
+    </div>
+  </div>
+</div>
 
 
 <!-- ============================================================ -->
@@ -1032,8 +1066,12 @@ function renderHistoryPage() {
               </div>
             </div>
             <div class="text-sm font-bold text-gray-700 ml-2 shrink-0">$${total}</div>
+            <button onclick="exportInvoice('${inv.invNum}')"
+              class="ml-2 p-1.5 text-gray-300 hover:text-green-500 btn-press shrink-0">
+              <i data-lucide="file-text" class="w-4 h-4"></i>
+            </button>
             <button onclick="editInvoice('${inv.invNum}')"
-              class="ml-2 p-1.5 text-gray-300 hover:text-blue-500 btn-press shrink-0">
+              class="ml-1 p-1.5 text-gray-300 hover:text-blue-500 btn-press shrink-0">
               <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
             <button onclick="deleteInvoice('${inv.invNum}')"
@@ -1683,15 +1721,160 @@ function getSelectedInvoices(cb) {
   });
 }
 
+// Parse stored orderText string back into items (reuses parseCommand)
+function parseOrderTextStr(orderText) {
+  const lines = (orderText || '').split('\n').map(l => l.trim());
+  const items = [];
+  let start   = 0;
+  for (let i = 0; i < lines.length; i++) { if (lines[i]) { start = i + 1; break; } }
+  for (let i = start; i < lines.length; i++) {
+    if (!lines[i]) continue;
+    const r = parseCommand(lines[i]);
+    if (!r.error) items.push(r);
+  }
+  return items;
+}
+
 function buildCSV(invoices) {
   const PTName = { cash: 'T·Cash', transfer: 'E·Transfer', cheque: 'Q·Cheque' };
   const esc    = v => `"${String(v).replace(/"/g, '""')}"`;
-  const rows   = [['Date', 'Invoice No', 'Store', 'Payment', 'Amount']];
+  const rows   = [['Date','Invoice No','Store','Product','Shortcode','Qty','Unit Price','Discount','Line Total','Payment','Invoice Total']];
   invoices.forEach(inv => {
-    const pt = getInvPayType(inv);
-    rows.push([inv.dateStr, inv.invNum, inv.storeName || '', PTName[pt] || pt, getInvTotal(inv).toFixed(2)]);
+    const pt       = getInvPayType(inv);
+    const ptLabel  = PTName[pt] || pt;
+    const invTotal = getInvTotal(inv).toFixed(2);
+    const disc     = inv.globalDiscount || 0;
+    const items    = parseOrderTextStr(inv.orderText);
+    if (!items.length) {
+      rows.push([inv.dateStr, inv.invNum, inv.storeName || '', '', '', '', '', '', '', ptLabel, invTotal]);
+      return;
+    }
+    items.forEach(({ product, qty, isExchange }) => {
+      const isCatA    = CAT_A.has(product.shorts);
+      const discStr   = isExchange ? 'Exchange' : isCatA ? '10%' : disc > 0 ? `${disc}%` : '';
+      const lineTotal = isExchange ? 0 : isCatA
+        ? product.price * qty * 0.9
+        : product.price * qty * (1 - disc / 100);
+      rows.push([inv.dateStr, inv.invNum, inv.storeName || '', product.name, product.shorts,
+        qty, product.price.toFixed(2), discStr, lineTotal.toFixed(2), ptLabel, invTotal]);
+    });
   });
   return '﻿' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+}
+
+function buildInvoiceText(inv) {
+  const PTFull = { cash: 'T·Cash (现金)', transfer: 'E·Transfer (银行转账)', cheque: 'Q·Cheque (支票)' };
+  const disc   = inv.globalDiscount || 0;
+  const pt     = getInvPayType(inv);
+  const items  = parseOrderTextStr(inv.orderText);
+  const SEP    = '─'.repeat(30);
+
+  let text = `[历史档案] ${inv.dateStr}\n`;
+  text += `商家: ${inv.storeName || '—'}\n`;
+  text += `发票号: ${inv.invNum}\n`;
+  text += SEP + '\n明细:\n';
+
+  items.forEach((it, i) => {
+    const { product: p, qty, isExchange } = it;
+    const isCatA  = CAT_A.has(p.shorts);
+    const discTag = isExchange ? ' [换货]' : isCatA ? ' [10% off]' : disc > 0 ? ` [${disc}% off]` : '';
+    const lineTot = isExchange ? 0 : isCatA ? p.price * qty * 0.9 : p.price * qty * (1 - disc / 100);
+    text += ` ${i + 1}. ${p.name}${discTag}\n`;
+    text += `    × ${qty} @ $${p.price.toFixed(2)} = $${lineTot.toFixed(2)}\n`;
+  });
+
+  text += SEP + '\n';
+  text += `支付方式: ${PTFull[pt] || pt}\n`;
+  text += `实收: $${getInvTotal(inv).toFixed(2)}\n`;
+  text += '\n— My Sales Calc';
+  return text;
+}
+
+function buildVisitNote(inv) {
+  const ptCN = { cash: '现金结账', transfer: '银行转账', cheque: '支票结账' }[getInvPayType(inv)] || '结账';
+  const parts = (inv.dateStr || '').split('/');              // DD/MM/YYYY
+  const dateFmt = parts.length >= 2 ? `${parts[1]}/${parts[0]}` : inv.dateStr;
+  const items = parseOrderTextStr(inv.orderText).filter(it => !it.isExchange);
+
+  let desc;
+  if (!items.length) {
+    desc = '换货';
+  } else if (items.length <= 3) {
+    desc = items.map(it => {
+      const { product: p, qty } = it;
+      const boxes = Math.floor(qty / p.eaBox);
+      const ea    = qty % p.eaBox;
+      const qtyStr = boxes > 0 && ea > 0 ? `${boxes}箱${ea}个`
+        : boxes > 0 ? `${boxes}箱` : `${qty}个`;
+      return `${qtyStr}${p.name}`;
+    }).join('、');
+  } else {
+    desc = `${items.length}款产品，合计 $${getInvTotal(inv).toFixed(2)}`;
+  }
+  return `上次拜访(${dateFmt}): 拿了${desc}，${ptCN}。`;
+}
+
+let _exportInv = null;
+
+function exportInvoice(invNum) {
+  if (!db) return;
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').get(invNum);
+  req.onsuccess = e => {
+    const inv = e.target.result;
+    if (!inv) return;
+    _exportInv = inv;
+    document.getElementById('export-text').value = buildInvoiceText(inv);
+    document.getElementById('export-modal').classList.remove('hidden');
+    lucide.createIcons();
+  };
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal').classList.add('hidden');
+  _exportInv = null;
+}
+
+function copyExportText() {
+  const text = document.getElementById('export-text').value;
+  navigator.clipboard?.writeText(text).then(() => alert('已复制到剪贴板 ✓'));
+}
+
+function copyVisitNote() {
+  if (!_exportInv) return;
+  const note = buildVisitNote(_exportInv);
+  navigator.clipboard?.writeText(note).then(() => alert(`已复制拜访备注 ✓\n\n${note}`));
+}
+
+function exportAllCSV() {
+  if (!db) return;
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
+  req.onsuccess = e => {
+    const all = e.target.result;
+    if (!all.length) { alert('No invoices in history'); return; }
+    const csv  = buildCSV(all.sort((a, b) => a.invNum.localeCompare(b.invNum)));
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const d    = new Date();
+    const tag  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    downloadOrShare(blob, `all_invoices_${tag}.csv`, 'All Invoices', '');
+  };
+}
+
+function exportAllJSON() {
+  if (!db) return;
+  const req = db.transaction('invoices', 'readonly').objectStore('invoices').getAll();
+  req.onsuccess = e => {
+    const all = e.target.result;
+    if (!all.length) { alert('No invoices in history'); return; }
+    const data = all.map(inv => ({
+      invNum: inv.invNum, dateStr: inv.dateStr, storeName: inv.storeName,
+      orderText: inv.orderText, globalDiscount: inv.globalDiscount,
+      paymentType: getInvPayType(inv), total: getInvTotal(inv),
+    }));
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const d    = new Date();
+    const tag  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    downloadOrShare(blob, `invoices_${tag}.json`, 'Invoices JSON', '');
+  };
 }
 
 async function downloadOrShare(blob, filename, title, text) {
