@@ -333,7 +333,12 @@ const PRODUCTS = [
 const CAT_A = new Set(['P', 'J', 'N']);
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
-const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
+// '1.5' added as alias for '1.5K' so both "1.5 10" and "1.5k10" work
+// '1.5' 作为 '1.5K' 的别名，支持两种输入方式
+const SORTED_PRODUCTS = [
+  ...PRODUCTS,
+  { ...PRODUCTS.find(p => p.shorts === '1.5K'), shorts: '1.5' },
+].sort((a, b) => b.shorts.length - a.shorts.length);
 
 
 // ============================================================
