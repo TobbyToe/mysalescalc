@@ -958,25 +958,42 @@ function renderLoadInForm() {
 
   const form = document.getElementById('load-in-form');
   form.innerHTML = ordered.map(p => {
-    const qty   = loadIn ? (loadIn[p.shorts] || '') : '';
+    const stored = loadIn ? (loadIn[p.shorts] || null) : null;
+    const boxVal = stored ? (typeof stored === 'object' ? (stored.box || '') : '') : '';
+    const eaVal  = stored ? (typeof stored === 'object' ? (stored.ea  || '') : stored) : '';
     const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
+    const dis    = isSet ? 'disabled' : '';
     return `
       <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
-        <span class="text-xs font-mono font-bold text-blue-500 w-12 shrink-0">${p.shorts}</span>
-        <span class="text-xs text-gray-600 flex-1 truncate pr-2">${p.name}</span>
-        <input type="number" min="0" inputmode="numeric"
-          class="load-in-qty w-16 text-right text-sm font-bold border border-gray-200 rounded-lg px-2 py-1.5 ${disCls}"
-          data-shorts="${p.shorts}" value="${qty}" ${isSet ? 'disabled' : ''} placeholder="0">
+        <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
+        <span class="text-xs text-gray-600 flex-1 min-w-0 truncate pr-1">${p.name}</span>
+        <div class="flex items-center gap-1 shrink-0">
+          <input type="number" min="0" inputmode="numeric"
+            class="load-in-input w-11 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}"
+            data-shorts="${p.shorts}" data-type="box" value="${boxVal}" ${dis} placeholder="0">
+          <span class="text-xs text-gray-400 w-6 text-center">×${p.eaBox}</span>
+          <input type="number" min="0" inputmode="numeric"
+            class="load-in-input w-11 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}"
+            data-shorts="${p.shorts}" data-type="ea" value="${eaVal}" ${dis} placeholder="ea">
+        </div>
       </div>`;
   }).join('');
 }
 
 function saveLoadIn() {
-  const inputs = document.querySelectorAll('.load-in-qty');
-  const data   = {};
-  inputs.forEach(inp => {
-    const qty = parseInt(inp.value, 10);
-    if (qty > 0) data[inp.dataset.shorts] = qty;
+  const data = {};
+  document.querySelectorAll('.load-in-input').forEach(inp => {
+    const shorts = inp.dataset.shorts;
+    const type   = inp.dataset.type; // 'box' or 'ea'
+    const val    = parseInt(inp.value, 10) || 0;
+    if (!data[shorts]) data[shorts] = { box: 0, ea: 0 };
+    data[shorts][type] = val;
+  });
+  // Drop products with zero total / 总数为零的不存储
+  Object.keys(data).forEach(shorts => {
+    const product = PRODUCTS.find(p => p.shorts === shorts);
+    if (!product || (data[shorts].box * product.eaBox + data[shorts].ea) === 0)
+      delete data[shorts];
   });
   localStorage.setItem(LOAD_IN_KEY(), JSON.stringify(data));
   renderVanPage();
@@ -985,10 +1002,20 @@ function saveLoadIn() {
 function editLoadIn() {
   document.getElementById('btn-edit-load').classList.add('hidden');
   document.getElementById('btn-save-load').classList.remove('hidden');
-  document.querySelectorAll('.load-in-qty').forEach(inp => {
+  document.querySelectorAll('.load-in-input').forEach(inp => {
     inp.disabled = false;
-    inp.className = inp.className.replace('bg-gray-50', 'bg-white').replace('text-gray-400', '');
+    inp.classList.remove('bg-gray-50', 'text-gray-400');
+    inp.classList.add('bg-white');
   });
+}
+
+// Total loaded qty for a product (handles both new {box,ea} and old number format)
+// 计算某产品的总出货量（兼容新旧存储格式）
+function getLoadedTotal(loadIn, product) {
+  const val = loadIn[product.shorts];
+  if (!val) return 0;
+  if (typeof val === 'number') return val; // backward compat / 向后兼容
+  return (val.box || 0) * product.eaBox + (val.ea || 0);
 }
 
 // --- Today's invoices from IndexedDB / 从IndexedDB获取今日发票 ---
@@ -1078,8 +1105,12 @@ function renderInventoryTable(invoices) {
     return;
   }
 
-  const sold   = calcSoldQty(invoices);
-  const loaded = VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(p => p && (loadIn[p.shorts] || 0) > 0);
+  const sold    = calcSoldQty(invoices);
+  const allOrdered = [
+    ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
+    ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+  ];
+  const loaded = allOrdered.filter(p => getLoadedTotal(loadIn, p) > 0);
 
   if (!loaded.length) {
     el.innerHTML = '<p class="text-xs text-gray-300 text-center py-3">No products loaded today</p>';
@@ -1094,8 +1125,8 @@ function renderInventoryTable(invoices) {
       <span class="w-10 text-right">Left</span>
     </div>` +
   loaded.map(p => {
-    const loadedQty = loadIn[p.shorts] || 0;
-    const soldQty   = sold[p.shorts]   || 0;
+    const loadedQty = getLoadedTotal(loadIn, p);
+    const soldQty   = sold[p.shorts] || 0;
     const left      = loadedQty - soldQty;
     const leftCls   = left < 0 ? 'text-red-500' : left === 0 ? 'text-gray-400' : 'text-green-600';
     return `
@@ -1139,8 +1170,12 @@ function generateSummary() {
 
     if (loadIn) {
       text += `\nINVENTORY\n`;
-      VAN_LOAD_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(p => p && (loadIn[p.shorts] || 0) > 0).forEach(p => {
-        const loadedQty = loadIn[p.shorts];
+      const summaryOrdered = [
+        ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
+        ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+      ].filter(p => getLoadedTotal(loadIn, p) > 0);
+      summaryOrdered.forEach(p => {
+        const loadedQty = getLoadedTotal(loadIn, p);
         const soldQty   = sold[p.shorts] || 0;
         const left      = loadedQty - soldQty;
         const name      = p.name.length > 22 ? p.name.slice(0, 21) + '…' : p.name;
