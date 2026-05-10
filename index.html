@@ -379,6 +379,14 @@
     <span class="text-sm font-semibold text-blue-700">Total Expenses</span>
     <span id="exp-total" class="text-lg font-mono font-bold text-blue-700">$0.00</span>
   </div>
+
+  <!-- Clear button -->
+  <div class="mt-3 flex justify-end">
+    <button onclick="clearExpenses()"
+      class="text-xs text-red-400 border border-red-200 rounded-lg px-3 py-1.5 btn-press bg-white">
+      Clear Day
+    </button>
+  </div>
 </div>
 
 
@@ -2081,6 +2089,13 @@ function saveExpenses() {
   localStorage.setItem('expenses_v1', JSON.stringify(expenses));
   const total = expenses.lunch + expenses.petrol + expenses.others + expenses.others2;
   document.getElementById('exp-total').textContent = `$${total.toFixed(2)}`;
+}
+
+function clearExpenses() {
+  if (!confirm('Clear all expenses for today?')) return;
+  expenses = { lunch: 0, petrol: 0, others: 0, others2: 0, label1: expenses.label1, label2: expenses.label2 };
+  localStorage.setItem('expenses_v1', JSON.stringify(expenses));
+  renderExpensesPage();
 }
 
 function renderExpensesPage() {
