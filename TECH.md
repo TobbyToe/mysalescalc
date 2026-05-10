@@ -7,9 +7,36 @@
 
 ## Changelog / 版本记录
 
+### v3.0 — History, Expenses, Auth / 历史增强·费用·登录 (2026-05-09)
+**New features / 新功能：**
+- **Password login**: SHA-256 salted hash auth, session via `sessionStorage` (expires on tab close)
+  - Password: `admin8888` · Salt: `msc$2026#` · Hash stored in `AUTH_HASH` constant
+  - Admin status bar (top, 24px, dark blue) shows logged-in user + Log out button
+- **Expenses tab** (4 items): Lunch, Petrol, Others-1, Others-2 — two "Others" have editable labels; all blur to 2 d.p.
+- **History page** (replaces modal):
+  - Grouped by day with sticky date subtitles + day-level checkboxes
+  - Fuzzy search (normalises spaces / hyphens before compare)
+  - Bulk actions bar: Del · CSV · Summary (PDF & Share removed)
+  - Per-invoice: Edit (reloads to Sales), Delete, structured-text export (file-text icon)
+  - All CSV / All JSON export buttons (top-right)
+- **Export / 商家档案**:
+  - Structured invoice text (`buildInvoiceText`) — Chinese format with line items
+  - Visit note (`buildVisitNote`) — one-line CRM summary in Chinese
+  - Per-item CSV (`buildCSV`) — 11 columns, suitable for Excel pivot
+  - Markdown table share text (`buildShareText`)
+- **Van Sales improvements**:
+  - Load-in form auto-collapses after Confirm; chevron toggle button next to Edit
+  - Summary & Clear Day moved to fixed bottom bar (`#van-action-bar`)
+  - Summary modal: rows grouped by T/E/Q with colour coding + subtotals + audit box
+
+**Changed / 修改：**
+- Removed Print button from invoice modal
+- Removed PDF & Share buttons from History bulk-action bar
+- Service Worker cache bumped `msc-v2` → `msc-v3`; added `skipWaiting` + `activate` cleanup
+
 ### v2.0 — Van Sales Module / 车销管理模块 (2026-05-09)
 **New features / 新功能：**
-- Added **Van Sales tab** (bottom navigation: Sales | Van)
+- Added **Van Sales tab** (bottom navigation: Sales | Van | Expenses | History)
 - **Morning Load-In**: record daily stock taken out, stored in `localStorage` keyed by date
 - **Real-time inventory deduction**: sold quantities calculated from today's saved invoices
 - **Evening settlement**: sales totals grouped by T·Cash / E·Transfer / Q·Cheque
@@ -17,13 +44,9 @@
 - **Clear Day**: wipes today's load-in only, invoice history preserved
 
 **Changed / 修改：**
-- Payment type changed from binary toggle (`isTransfer: boolean`) to 3-way enum (`paymentType: 'cash' | 'transfer' | 'cheque'`) — Cheque support added
-- Invoice badge now shows CASH / TRANSFER / CHEQUE with distinct colors
-- Cash rounding now triggered by `paymentType === 'cash'` instead of `!isTransfer`
-- localStorage key `transfer_v2` → `payType_v2` (backward-compatible migration on load)
-
-**Backward compatibility / 向后兼容：**
-- Old invoices stored with `isTransfer: true/false` are automatically read via `getInvPayType(inv)` helper
+- Payment type: `isTransfer: boolean` → `paymentType: 'cash' | 'transfer' | 'cheque'`
+- Invoice badge shows CASH / TRANSFER / CHEQUE with distinct colours
+- `getInvPayType(inv)` helper for backward-compatible old invoice reads
 
 ### v1.0 — Initial release / 初始发布 (2026-04)
 - Single-file offline PWA invoice generator
@@ -31,11 +54,9 @@
 
 ---
 
----
-
 ## 1. Project Overview / 项目概述
 
-**My Sales Calc** is an offline-capable single-file Progressive Web App (PWA) for generating GST-inclusive tax invoices for an Australian Korean food wholesale business.
+**My Sales Calc** is an offline-capable single-file PWA for generating GST-inclusive tax invoices for an Australian Korean food wholesale business.
 
 **My Sales Calc** 是一个离线单文件 PWA，用于澳洲韩国食品批发商快速生成含GST税务发票。
 
@@ -44,8 +65,8 @@
 | Build | Single HTML file, no build step / 单文件，无需构建 |
 | Styling | Tailwind CSS v2.2.19 (CDN, pinned) |
 | Icons | Lucide Icons v0.284.0 (CDN, pinned) |
-| Offline | Service Worker (PWA) |
-| Storage | localStorage + IndexedDB |
+| Offline | Service Worker (PWA), cache name `msc-v3` |
+| Storage | localStorage + IndexedDB + sessionStorage (auth) |
 
 ---
 
@@ -63,25 +84,53 @@ mysalescalc-1/
 
 **index.html internal sections / index.html 内部分区：**
 
-| Section | Line (approx) | Content |
-|---------|---------------|---------|
-| 1 | 182 | `PRODUCTS` array / 产品数组 |
-| 2 | 244 | App state / 应用状态 |
-| 3 | 256 | `parseCommand()` — command parser / 快捷码解析 |
-| 4 | 296 | `parseTextarea()` — textarea parser / 多行输入解析 |
-| 5 | 332 | Calculations / 金额计算 |
-| 6–7 | 387 | Live feedback + controls / 实时反馈与控件 |
-| 8 | 456 | Invoice number / 发票号 |
-| 9 | 480 | `buildInvoiceHTML()` — invoice renderer / 发票HTML构建 |
-| 10 | 610 | Modal actions / 模态框操作 |
-| 11 | 679 | IndexedDB history / 历史记录 |
-| 12 | 761 | localStorage persistence / 持久化 |
-| 13 | 774 | Service Worker / 离线缓存 |
-| 14 | 793 | Init / 初始化 |
+| Section | Content |
+|---------|---------|
+| CSS styles | Login overlay styles, btn-press, print media |
+| Login overlay HTML | `#login-overlay` — full-screen auth gate |
+| Auth bar HTML | `#auth-bar` — 24px top bar, admin label + Log out |
+| Nav | 4 tabs: Sales · Van · Expenses · History |
+| Sales page | Invoice calculator, textarea input |
+| Van page | Load-in form, inventory table, fixed bottom bar |
+| History page | Grouped day list, bulk-action bar, search |
+| Expenses page | 4 expense rows with editable labels |
+| Modals | Invoice modal, Summary modal, Export modal |
+| `PRODUCTS` array | Product definitions (price, shortcode, eaBox) |
+| App state | Global variables |
+| `parseCommand()` | Single-line shortcode parser |
+| `parseTextarea()` | Multi-line textarea parser |
+| Calculations | Discount, rounding, totals |
+| UI rendering | `renderControlButtons`, `onTextareaInput`, etc. |
+| Invoice logic | `buildInvoiceHTML`, `saveInvoice`, invoice number |
+| History logic | `renderHistoryPage`, `deleteSelected`, export fns |
+| Expenses logic | `saveExpenses`, `loadExpenses`, `fmtExp` |
+| Van Sales logic | Load-in, inventory, summary, `generateSummary` |
+| Auth logic | `doLogin`, `doLogout`, `hashPassword`, `checkAuth` |
+| Service Worker | Inline Blob SW, cache CDN assets |
 
 ---
 
-## 3. Product Data / 产品数据
+## 3. Authentication / 登录验证
+
+| Property | Value |
+|----------|-------|
+| Password | `admin8888` |
+| Salt | `msc$2026#` |
+| Algorithm | SHA-256 via `crypto.subtle` (WebCrypto API) |
+| Stored | Hash only — plaintext never in source |
+| Session | `sessionStorage` key `msc_auth_v1` |
+| Expiry | Tab/window close — no time limit within session |
+
+**To change the password / 修改密码：**
+1. Compute new hash in terminal (use **single quotes** to prevent `$` expansion):
+   ```bash
+   echo -n 'msc$2026#NEWPASSWORD' | shasum -a 256
+   ```
+2. Replace `AUTH_HASH` constant in index.html with the new hash.
+
+---
+
+## 4. Product Data / 产品数据
 
 ### CSV format / CSV格式
 `references/products - Sheet1.csv`
@@ -90,7 +139,7 @@ no., shorts, products, unit price, ea/box
 ```
 
 ### JS mapping / JS字段映射
-`PRODUCTS` array in index.html (line 182):
+`PRODUCTS` array in index.html:
 
 | CSV column | JS field | Description |
 |------------|----------|-------------|
@@ -109,215 +158,222 @@ no., shorts, products, unit price, ea/box
    ```js
    { no:60, shorts:'XX', name:'Product Name', price:9.90, eaBox:12 },
    ```
-3. If it should have auto 10% off, add its shortcode to `CAT_A` (see Section 5).
-
-### How to update a price / 如何修改价格
-
-Edit the `price` field in the `PRODUCTS` array. Also update the CSV to keep them in sync.
+3. If it should have auto 10% off, add its shortcode to `CAT_A` (see Section 6).
 
 ---
 
-## 4. Command Parsing / 快捷码解析
+## 5. Command Parsing / 快捷码解析
 
-### Input format / 输入格式 (index.html line 256)
+### Input format / 输入格式
 
 ```
-Line 1:   Store name              ← 店名
-Line 2+:  [ex?][ShortCode][Qty][box?]   ← 产品指令
+Line 1:   Store name                      ← 店名
+Line 2+:  [ex?][ShortCode][Qty][box?]    ← 产品指令
 ```
 
-Spaces are stripped before parsing — `v 1 box` = `v1box`.  
-解析前去掉所有空格，`v 1 box` 等同于 `v1box`。
+Spaces are stripped before parsing — `v 1 box` = `v1box`.
 
 ### Unit suffix / 单位后缀
 
-| Input example | Result |
-|---------------|--------|
+| Input | Result |
+|-------|--------|
 | `c10` | 10 ea of Mat Kimchi 450g |
-| `c2box` | 2 × 20 = 40 ea (eaBox = 20) |
-| `j1box` | 1 × 10 = 10 ea (eaBox = 10) |
+| `c2box` | 2 × 20 = 40 ea |
+| `j1box` | 1 × 10 = 10 ea |
 
 ### Exchange prefix / 换货前缀 `ex`
 
-Prepend `ex` to mark an item as exchange — quantity is tracked but total shows $0.  
-加 `ex` 前缀表示换货，数量正常显示，金额显示 $0。
-
 ```
-exc10      ← exchange 10 × Mat Kimchi 450g
+exc10      ← exchange 10 × Mat Kimchi 450g  (qty shown, total $0)
 exj1box    ← exchange 1 box of Jarae Seaweed
 ```
 
 ### Parsing order / 解析顺序
 
-Shortcodes are matched **longest-first** to prevent ambiguity (e.g. `W` vs `WC` vs `WK`).  
-按快捷码**长度降序**匹配，防止短码误匹配（如 `W` 误匹配 `WC`）。
+Shortcodes matched **longest-first** to prevent ambiguity (`W` vs `WC` vs `WK`).  
+Note: `1.5K` and `1.5` both accepted as alias for Mat Kimchi 1.5kg.
 
 ### Error handling / 错误处理
 
-- Unrecognized lines: shown as yellow warnings above the invoice, skipped silently.
-- Valid lines are still processed. / 有效行正常处理，不受错误行影响。
+Unrecognised lines shown as yellow warnings; valid items still processed.
 
 ---
 
-## 5. Discount Rules / 折扣规则
-
-### Category A — Auto 10% Off (index.html line 235, 342)
-
-Products with `shorts` = **`P`**, **`J`**, **`N`** always get 10% off.  
-快捷码为 `P`、`J`、`N` 的产品固定9折。
+## 6. Discount Rules / 折扣规则
 
 ```js
 const CAT_A = new Set(['P', 'J', 'N']);
 ```
 
-- **ALWAYS discounted, NEVER eligible for global 2%/4%.**
-- **始终享受9折，排除在全局折扣之外。**
-
-### Salt — Special label
-
-`shorts = 'Salt'` shows **"Special"** in the Disc column. No percentage discount.  
-显示 "Special" 标签，无百分比折扣，也不参与全局折扣。
-
-### Category B — Global Discount
-
-All other products are eligible for the global 2% or 4% discount button.  
-其余产品参与全局 2%/4% 折扣按钮。
-
-### Exchange items / 换货产品
-
-Exchange items (`ex` prefix) are **excluded from all discounts** and show $0.  
-换货产品不参与任何折扣，金额为 $0。
-
-### Discount table summary / 折扣规则汇总
-
 | Category | Condition | Auto discount | Global 2%/4% |
 |----------|-----------|---------------|--------------|
 | Cat A | shorts ∈ {P, J, N} | 10% off | ✗ Excluded |
-| Salt | shorts = Salt | "Special" label | ✗ Excluded |
+| Salt | shorts = `Salt` | "Special" label | ✗ Excluded |
 | Cat B | All others | None | ✓ Eligible |
 | Exchange | `ex` prefix | None | ✗ Excluded |
 
 ---
 
-## 6. Cash Rounding / 现金取整 (index.html line 373)
+## 7. Cash Rounding / 现金取整
 
-Australian standard rounding to nearest $0.05. Only applies in **Cash mode**.  
-澳洲标准现金取整至最近5分，仅 **Cash 模式**生效。
+Australian standard — nearest $0.05, Cash mode only.
 
 ```js
 cashTotal    = Math.round(totalAfterDisc * 20) / 20;
-cashRounding = cashTotal - totalAfterDisc;   // can be positive or negative
+cashRounding = cashTotal - totalAfterDisc;
 ```
 
-| Cents | Example | Rounds to |
-|-------|---------|-----------|
-| .01–.02 | $37.51 | $37.50 (down) |
-| .03–.07 | $37.56 | $37.55 (to 5) |
-| .08–.09 | $37.58 | $37.60 (up) |
-
-Rounding is applied **after all discounts**.  
-取整在**所有折扣之后**计算。
+Rounding applied **after all discounts**.
 
 ---
 
-## 7. Invoice Footer / 发票页脚 (index.html line 531)
+## 8. Invoice Footer / 发票页脚
 
-### Cash mode / 现金模式
-
+### Cash mode
 ```
 Sub Total              $XXX.XX
-Discount               -$X.XX    ← shown only if any discount exists
-↳ Others 2% Off        -$X.XX    ← shown only if global discount active
-↳ Seaweed 10% Off      -$X.XX    ← shown only if Cat A items present
-Cash Rounding          ±$X.XX    ← shown only if non-zero
-Cash Total             $XXX.XX   ← bold, highlighted
+Discount               -$X.XX    ← if any discount
+↳ Others 2% Off        -$X.XX    ← if global discount active
+↳ Seaweed 10% Off      -$X.XX    ← if Cat A items present
+Cash Rounding          ±$X.XX    ← if non-zero
+Cash Total             $XXX.XX   ← bold
 ```
 
-### Transfer mode / 转账模式
-
+### Transfer / Cheque mode
 ```
 Sub Total              $XXX.XX
-Discount               -$X.XX    ← same breakdown as above
+Discount               -$X.XX
 ↳ Others 2% Off        -$X.XX
 ↳ Seaweed 10% Off      -$X.XX
-Total                  $XXX.XX   ← no rounding lines
+Total                  $XXX.XX   ← no rounding
 ```
 
-**No GST line on either mode** — prices are GST-inclusive.  
-**两种模式均无GST行** — 价格已含GST。
+No GST line — prices are GST-inclusive.
 
 ---
 
-## 8. Invoice Number / 发票号 (index.html line 464)
+## 9. Invoice Number / 发票号
 
-Format / 格式: `DDMMYY` + store name normalized  
-Store name normalization: uppercase, remove all non-alphanumeric characters.  
-店名标准化：大写，去掉字母数字以外的所有字符（空格、`&` 等）。
+Format: `DDMMYY` + store name normalised (uppercase, non-alphanumeric stripped).
 
 ```
-"kfl flemington"  →  "KFLFLEMINGTON"  →  "090526KFLFLEMINGTON"
-"D & K"           →  "DK"             →  "090526DK"
+"kfl flemington"  →  "090526KFLFLEMINGTON"
+"D & K"           →  "090526DK"
 ```
 
 ---
 
-## 9. Data Persistence / 数据持久化
+## 10. Data Persistence / 数据持久化
 
-### localStorage — current cart / 当前购物车
+### localStorage keys
 
 | Key | Content |
 |-----|---------|
-| `orderText_v2` | Textarea content / 输入框内容 |
-| `disc_v2` | Global discount value (0/2/4) |
-| `transfer_v2` | Payment mode ("true"/"false") |
+| `orderText_v2` | Textarea content |
+| `disc_v2` | Global discount (0 / 2 / 4) |
+| `payType_v2` | Payment mode (`cash` / `transfer` / `cheque`) |
+| `loadIn_YYYY-MM-DD` | Daily load-in quantities (Van tab) |
+| `expenses_v1` | Expenses object `{lunch, petrol, others, others2, label1, label2}` |
 
-Restored automatically on page load. / 页面加载时自动恢复。
+### sessionStorage keys
 
-### IndexedDB — invoice history / 历史发票
+| Key | Content |
+|-----|---------|
+| `msc_auth_v1` | `'1'` when authenticated; absent = not logged in |
+
+### IndexedDB
 
 | Property | Value |
 |----------|-------|
 | Database | `SalesCalcDB` |
 | Object Store | `invoices` |
-| Key | `invNum` (invoice number) |
-| Stored fields | `invNum`, `dateStr`, `storeName`, `orderText`, `globalDiscount`, `isTransfer`, `summary`, `html` |
+| Key | `invNum` |
+| Stored fields | `invNum`, `dateStr`, `storeName`, `orderText`, `globalDiscount`, `paymentType`, `summary`, `html` |
 
-> ⚠️ IndexedDB is browser-local. Clearing browser data will erase history.  
-> ⚠️ IndexedDB 绑定浏览器，清除浏览器数据会丢失历史记录。  
-> Recommended: add an Export JSON button for backup. / 建议添加导出JSON功能备份。
-
----
-
-## 10. PWA / Service Worker (index.html line 774)
-
-- Registered inline via `URL.createObjectURL(new Blob([...]))` — no separate SW file needed.
-- Caches Tailwind CSS and Lucide Icons on install.
-- Serves cached assets on subsequent fetches — app works fully offline after first load.
-- Cache name: `msc-v2`
+> ⚠️ IndexedDB is browser-local. Clearing browser data erases all history.  
+> Use **All CSV** or **All JSON** buttons in History to back up data.
 
 ---
 
-## 11. Common Modification Scenarios / 常见修改场景
+## 11. History Page / 历史记录
+
+- Invoices grouped by day; each day has a subtitle row with a day-level checkbox
+- **Fuzzy search**: normalises spaces, hyphens, underscores, apostrophes before matching
+- **Bulk actions**: Del · CSV (per-item, 11 columns) · Summary
+- **Per-invoice actions**: file-text (export modal) · pencil (edit) · trash (delete)
+- **Export modal** (`#export-modal`): structured text + Copy Text + Visit Note buttons
+- **All CSV / All JSON** (top-right): export entire history at once
+
+### CSV columns / CSV字段 (11 columns)
+`Date · Invoice No · Store · Product · Shortcode · Qty · Unit Price · Discount · Line Total · Payment · Invoice Total`
+
+---
+
+## 12. Expenses Tab / 费用记录
+
+4 rows: Lunch · Petrol · Others-1 (editable label) · Others-2 (editable label)  
+- Labels editable inline; values blur to 2 decimal places (`fmtExp`)
+- Stored in `expenses_v1` localStorage key
+- Used in Van Summary audit box: Cash(T) − Expenses = Net Cash → Rounded (÷$0.50)
+
+---
+
+## 13. Van Sales Tab / 车销管理
+
+### Load-in form / 早上装车
+- Input quantities per product (ea or box depending on product type)
+- Stored in `localStorage` keyed `loadIn_YYYY-MM-DD`
+- Auto-collapses after Confirm; chevron toggle button to expand/collapse
+- **Edit** button re-opens form for correction
+
+### Inventory table / 库存追踪
+- Remaining = Loaded − Sold (sold calculated from today's saved invoices)
+
+### Summary modal / 结算汇总
+- Rows grouped by T·Cash (green) / E·Transfer (blue) / Q·Cheque (orange)
+- Subtotals per group; Grand Total; audit box (Cash − Expenses = Net)
+
+### Fixed bottom bar / 固定底部栏
+- **Summary** button → opens summary modal
+- **Clear Day** → wipes today's load-in (invoice history preserved)
+
+---
+
+## 14. PWA / Service Worker
+
+- Registered inline via `URL.createObjectURL(new Blob([...]))` — no separate SW file
+- Cache name: `msc-v3`
+- `skipWaiting` + `activate` handler clears old caches on update
+- Caches Tailwind CSS + Lucide Icons; app works fully offline after first load
+
+**To force update on device / 强制更新缓存：**  
+Hard refresh: Cmd+Shift+R (desktop) or clear site data (mobile Safari).
+
+---
+
+## 15. Common Modification Scenarios / 常见修改场景
 
 ### Change a product price / 改产品价格
-Edit `price` in the `PRODUCTS` array (index.html ~line 182). Update CSV too.
+Edit `price` in `PRODUCTS` array. Update CSV too.
 
 ### Add a new product / 新增产品
 1. Add to `PRODUCTS` array in index.html
 2. Add to `references/products - Sheet1.csv`
+3. If auto 10% off: add shortcode to `CAT_A`
+
+### Change the login password / 修改登录密码
+```bash
+echo -n 'msc$2026#NEWPASSWORD' | shasum -a 256
+```
+Replace `AUTH_HASH` in index.html with the output hash.
 
 ### Change which products get auto 10% off / 改哪些产品固定9折
-Edit `CAT_A` set (index.html ~line 235):
 ```js
-const CAT_A = new Set(['P', 'J', 'N']);  // add or remove shortcodes here
+const CAT_A = new Set(['P', 'J', 'N']);  // add or remove shortcodes
 ```
 
-### Add a new global discount tier / 新增折扣档位（如5%）
-1. Add a button in the HTML controls section
-2. Call `setDiscount(5)` on click
-
-### Change the invoice header company info / 改发票抬头公司信息
-Edit strings in `buildInvoiceHTML()` (~line 560):
+### Change invoice company info / 改发票公司抬头
+Edit strings in `buildInvoiceHTML()`:
 ```js
 <div>From: Korean Foods P/L</div>
 <div>ABN 65 122 947 586</div>
@@ -325,17 +381,23 @@ Edit strings in `buildInvoiceHTML()` (~line 560):
 
 ---
 
-## 12. Verification Checklist / 验证检查清单
+## 16. Verification Checklist / 验证检查清单
 
-After any change, open index.html in a browser and test:  
-修改后在浏览器打开 index.html 验证：
+After any change, test in browser:
 
-- [ ] Cat A product (J/P) + Cat B product + 2% → footer shows `Discount`, `↳ Others 2%`, `↳ Seaweed 10%`
-- [ ] Exchange item (`ex` prefix) → $0 on invoice, not counted in any discount
-- [ ] Cash mode → rounding line appears (if non-zero), total rounded to $0.05
-- [ ] Transfer mode → no rounding line, shows `Total` not `Cash Total`
-- [ ] Salt product → shows "Special" in Disc column, not affected by global discount
-- [ ] `box` suffix → quantity = N × eaBox value
-- [ ] Store name with spaces/special chars → invoice number strips them correctly
-- [ ] Reload page → textarea + discount state restored from localStorage
-- [ ] Save invoice → appears in History modal
+- [ ] Login with `admin8888` → enters app; wrong password → error shown
+- [ ] Log out → returns to login overlay
+- [ ] Cat A (J/P) + Cat B + 2% → footer shows 3-line discount breakdown
+- [ ] Exchange (`ex` prefix) → $0, excluded from discounts
+- [ ] Cash mode → rounding line, total to $0.05
+- [ ] Transfer/Cheque → no rounding line
+- [ ] Salt → "Special" label, no global discount
+- [ ] `box` suffix → qty = N × eaBox
+- [ ] Store name with special chars → invoice number strips correctly
+- [ ] Reload → textarea + discount state restored
+- [ ] Save invoice → appears in History, grouped under today's date
+- [ ] History search → fuzzy match works (spaces/hyphens normalised)
+- [ ] History bulk select → Del · CSV · Summary work
+- [ ] Expenses labels editable; values show 2 d.p. on blur
+- [ ] Van load-in auto-collapses after Confirm; chevron toggles it
+- [ ] Van Summary shows T/E/Q groups + audit box
