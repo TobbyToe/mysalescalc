@@ -1595,7 +1595,7 @@ function renderInventoryTable(invoices) {
     ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
     ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
   ];
-  const loaded = allOrdered.filter(p => getLoadedTotal(loadIn, p) > 0);
+  const loaded = allOrdered.filter(p => getLoadedTotal(loadIn, p) > 0 || (sold[p.shorts] || 0) > 0);
 
   if (!loaded.length) {
     el.innerHTML = '<p class="text-xs text-gray-300 text-center py-3">No products loaded today</p>';
