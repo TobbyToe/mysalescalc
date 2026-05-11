@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.1.5</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.1.6</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -1494,6 +1494,21 @@ function editLoadIn() {
   });
 }
 
+// Format qty as box+ea string for clipboard text / 格式化为"箱+个"
+function fmtBoxEa(qty, product) {
+  const negative = qty < 0;
+  const abs = Math.abs(qty);
+  const eaBox = product.eaBox || 1;
+  if (EA_ONLY.has(product.shorts) || eaBox === 1) return String(qty);
+  const boxes = Math.floor(abs / eaBox);
+  const ea    = abs % eaBox;
+  let str;
+  if (boxes === 0)  str = String(ea);
+  else if (ea === 0) str = `${boxes}箱`;
+  else               str = `${boxes}*${eaBox}+${ea}`;
+  return negative ? `-${str}` : str;
+}
+
 // Total loaded qty for a product (handles both new {box,ea} and old number format)
 // 计算某产品的总出货量（兼容新旧存储格式）
 function getLoadedTotal(loadIn, product) {
@@ -1618,9 +1633,9 @@ function renderInventoryTable(invoices) {
     return `
       <div class="flex items-center py-2 border-b border-gray-50 last:border-0" ${zebra}>
         <span class="flex-1 text-xs font-mono font-bold text-blue-600 pr-1">${p.shorts}</span>
-        <span class="w-10 text-center text-sm text-gray-500">${loadedQty}</span>
+        <span class="w-12 text-center text-sm text-gray-500">${fmtBoxEa(loadedQty, p)}</span>
         <span class="w-10 text-center text-sm text-gray-500">${soldQty}</span>
-        <span class="w-10 text-right text-sm font-bold ${leftCls}">${left}</span>
+        <span class="w-12 text-right text-sm font-bold ${leftCls}">${fmtBoxEa(left, p)}</span>
       </div>`;
   }).join('');
 }
@@ -1721,11 +1736,11 @@ function renderSummaryModal(invoices, loadIn, sold) {
       const soldQty   = sold[p.shorts] || 0;
       const left      = loadedQty - soldQty;
       const flag      = left < 0 ? ' ⚠️' : '';
-      textLines.push(`${p.shorts}  出${loadedQty} 卖${soldQty} 余${left}${flag}`);
+      textLines.push(`${p.shorts}  出${fmtBoxEa(loadedQty, p)}  卖${soldQty}  余${fmtBoxEa(left, p)}${flag}`);
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.1.5');
+  textLines.push('', '— My Sales Calc v1.1.6');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
