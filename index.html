@@ -501,7 +501,7 @@ const PRODUCTS = [
   { no:4,  shorts:'N',     name:'Mat Kimchi Sliced 400g',             price:6.40,  eaBox:20 },
   { no:5,  shorts:'C',     name:'Mat Kimchi Sliced 450g',             price:6.90,  eaBox:20 },
   { no:6,  shorts:'95',    name:'Mat Kimchi Sliced 950g',             price:13.80, eaBox:8  },
-  { no:7,  shorts:'1.5K',  name:'Mat Kimchi Sliced 1.5kg',            price:18.90, eaBox:8  },
+  { no:7,  shorts:'1.5',   name:'Mat Kimchi Sliced 1.5kg',            price:18.90, eaBox:8  },
   { no:8,  shorts:'2K',    name:'Mat Kimchi Sliced 2kg',              price:22.00, eaBox:10 },
   { no:13, shorts:'O',     name:'Glass Jar Original 400g',            price:7.60,  eaBox:9  },
   { no:14, shorts:'V',     name:'Glass Jar Vegan 400g',               price:7.60,  eaBox:9  },
@@ -550,12 +550,7 @@ const PRODUCTS = [
 const CAT_A = new Set(['P', 'J', 'N']);
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
-// '1.5' added as alias for '1.5K' so both "1.5 10" and "1.5k10" work
-// '1.5' 作为 '1.5K' 的别名，支持两种输入方式
-const SORTED_PRODUCTS = [
-  ...PRODUCTS,
-  { ...PRODUCTS.find(p => p.shorts === '1.5K'), shorts: '1.5' },
-].sort((a, b) => b.shorts.length - a.shorts.length);
+const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
 
 // ============================================================
 // 2. STATE / 应用状态
@@ -652,9 +647,10 @@ function lineSub(product, qty, isExchange) {
 
 function lineAfterDisc(product, qty, isExchange) {
   if (isExchange) return 0;
-  if (CAT_A.has(product.shorts)) return product.price * qty * 0.9;
-  if (product.shorts !== 'Salt' && globalDiscount > 0) return product.price * qty * (1 - globalDiscount / 100);
-  return product.price * qty;
+  // Round each line to nearest cent so sum matches displayed line totals
+  if (CAT_A.has(product.shorts)) return Math.round(product.price * qty * 0.9 * 100) / 100;
+  if (product.shorts !== 'Salt' && globalDiscount > 0) return Math.round(product.price * qty * (1 - globalDiscount / 100) * 100) / 100;
+  return Math.round(product.price * qty * 100) / 100;
 }
 
 function discLabel(product, isExchange) {
@@ -1375,7 +1371,7 @@ function switchTab(tab) {
 // --- Load-In / 出货录入 ---
 
 // Priority order for the load-in form / 出货录入的产品显示顺序
-const VAN_ORDER = ['C','WC','95','1.5K','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','N','GG','PG','J','P','S','VS','M','B'];
+const VAN_ORDER = ['C','WC','95','1.5','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','N','GG','PG','J','P','S','VS','M','B'];
 
 // ea-only: sold loose, no box concept / 只卖散货，无整箱概念
 const EA_ONLY  = new Set(['SS','DRS','BF','RSS','FG','SQ','GG','PG','PGS','CG','LR','SO','0.5lb','1lb','2lb','5lb']);
@@ -1733,7 +1729,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   const totalExp = expenses.lunch + expenses.petrol + expenses.others + expenses.others2;
   const cashOnly = groups.cash.reduce((s, inv) => s + getInvTotal(inv), 0);
   const netCash  = cashOnly - totalExp;
-  const rounded   = Math.round(netCash * 2) / 2; // nearest $0.50
+  const rounded   = Math.round(netCash * 20) / 20; // nearest $0.05
 
   const row = (label, val, cls) =>
     `<div style="display:flex;justify-content:space-between;padding:2px 0;">
@@ -1756,7 +1752,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   }
   auditHtml += `<div style="border-top:2px solid #d1d5db;margin:6px 0;"></div>`;
   auditHtml += row('Net Cash', `$${netCash.toFixed(2)}`, 'text-gray-900');
-  auditHtml += row('Rounded (÷ $0.50)', `$${rounded.toFixed(2)}`, 'text-blue-700');
+  auditHtml += row('Rounded (÷ $0.05)', `$${rounded.toFixed(2)}`, 'text-blue-700');
 
   auditEl.innerHTML = auditHtml;
   auditEl.classList.remove('hidden');
@@ -1770,7 +1766,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   if (expenses.others2 > 0) textLines.push(`${'  '.concat(expenses.label2 || 'Others').padEnd(22)} -$${expenses.others2.toFixed(2).padStart(7)}`);
   if (totalExp > 0)         textLines.push(`${'Total Expenses'.padEnd(22)} -$${totalExp.toFixed(2).padStart(7)}`);
   textLines.push(`${'Net Cash'.padEnd(22)} $${netCash.toFixed(2).padStart(8)}`);
-  textLines.push(`${'Rounded (÷ $0.50)'.padEnd(22)} $${rounded.toFixed(2).padStart(8)}`);
+  textLines.push(`${'Rounded (÷ $0.05)'.padEnd(22)} $${rounded.toFixed(2).padStart(8)}`);
 
   document.getElementById('summary-text').value = textLines.join('\n');
   document.getElementById('summary-modal').classList.remove('hidden');
