@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.1.6</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.1.7</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -1504,7 +1504,7 @@ function fmtBoxEa(qty, product) {
   const ea    = abs % eaBox;
   let str;
   if (boxes === 0)  str = String(ea);
-  else if (ea === 0) str = `${boxes}箱`;
+  else if (ea === 0) str = `${boxes}box`;
   else               str = `${boxes}*${eaBox}+${ea}`;
   return negative ? `-${str}` : str;
 }
@@ -1654,7 +1654,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   const d       = new Date();
   const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
   document.getElementById('summary-date-title').textContent = dateStr;
-  document.getElementById('summary-total-count').textContent = `(共 ${invoices.length} 笔)`;
+  document.getElementById('summary-total-count').textContent = `(${invoices.length} orders)`;
 
   const PTLabel = { cash: 'T', transfer: 'E', cheque: 'Q' };
   const PTColor = { cash: 'text-green-600', transfer: 'text-blue-600', cheque: 'text-orange-500' };
@@ -1668,7 +1668,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   const tbody = document.getElementById('summary-rows');
   tbody.innerHTML = '';
   const textLines = [
-    `📋 日结汇总 · ${dateStr}（共 ${invoices.length} 笔）`,
+    `📋 Day Summary / 日结汇总 · ${dateStr} (${invoices.length} orders)`,
     '━━━━━━━━━━━━━━━━━━━━━━━━',
   ];
 
@@ -1725,7 +1725,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
   textLines.push(`💰 Grand Total:  $${grandTotal.toFixed(2)}`);
 
   if (loadIn && sold) {
-    textLines.push('', '📦 库存余量');
+    textLines.push('', '📦 Inventory / 库存余量');
     textLines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
     const ordered = [
       ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
@@ -1736,11 +1736,11 @@ function renderSummaryModal(invoices, loadIn, sold) {
       const soldQty   = sold[p.shorts] || 0;
       const left      = loadedQty - soldQty;
       const flag      = left < 0 ? ' ⚠️' : '';
-      textLines.push(`${p.shorts}  出${fmtBoxEa(loadedQty, p)}  卖${soldQty}  余${fmtBoxEa(left, p)}${flag}`);
+      textLines.push(`${p.shorts}  Out:${fmtBoxEa(loadedQty, p)}  Sold:${soldQty}  Left:${fmtBoxEa(left, p)}${flag}`);
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.1.6');
+  textLines.push('', '— My Sales Calc v1.1.7');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
@@ -1776,16 +1776,16 @@ function renderSummaryModal(invoices, loadIn, sold) {
   auditEl.classList.remove('hidden');
 
   // append audit to clipboard text
-  textLines.push('', '🧾 对账');
+  textLines.push('', '🧾 Audit / 对账');
   textLines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
-  textLines.push(`现金收入 (T):  $${cashOnly.toFixed(2)}`);
-  if (expenses.lunch   > 0) textLines.push(`  午餐:  -$${expenses.lunch.toFixed(2)}`);
-  if (expenses.petrol  > 0) textLines.push(`  油费:  -$${expenses.petrol.toFixed(2)}`);
+  textLines.push(`Cash Sales (T):  $${cashOnly.toFixed(2)}`);
+  if (expenses.lunch   > 0) textLines.push(`  Lunch:  -$${expenses.lunch.toFixed(2)}`);
+  if (expenses.petrol  > 0) textLines.push(`  Petrol:  -$${expenses.petrol.toFixed(2)}`);
   if (expenses.others  > 0) textLines.push(`  ${expenses.label1 || 'Others'}:  -$${expenses.others.toFixed(2)}`);
   if (expenses.others2 > 0) textLines.push(`  ${expenses.label2 || 'Others'}:  -$${expenses.others2.toFixed(2)}`);
-  if (totalExp > 0)         textLines.push(`支出合计:  -$${totalExp.toFixed(2)}`);
-  textLines.push(`净收入:  $${netCash.toFixed(2)}`);
-  textLines.push(`取整 (÷$0.05):  $${rounded.toFixed(2)}`);
+  if (totalExp > 0)         textLines.push(`Total Expenses:  -$${totalExp.toFixed(2)}`);
+  textLines.push(`Net Cash:  $${netCash.toFixed(2)}`);
+  textLines.push(`Rounded (÷$0.05):  $${rounded.toFixed(2)}`);
 
   document.getElementById('summary-text').value = textLines.join('\n');
   document.getElementById('summary-modal').classList.remove('hidden');
