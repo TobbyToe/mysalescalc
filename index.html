@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.4</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.5</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -855,9 +855,8 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
 
   let footerRows = fRow('Sub Total', `$${s.subTotal.toFixed(2)}`);
 
-  // Discount breakdown / 折扣明细
+  // Discount breakdown: breakdown lines first, then summary total / 先明细后汇总
   if (s.discAmt > 0) {
-    footerRows += fRow('Discount', `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
     if (s.catBDiscAmt > 0) {
       footerRows += fRow(`↳ Others ${globalDiscount}% Off`, `-$${s.catBDiscAmt.toFixed(2)}`, '13px', '#2563eb');
     }
@@ -867,6 +866,7 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     if (s.nDiscAmt > 0) {
       footerRows += fRow('↳ N 10% Off', `-$${s.nDiscAmt.toFixed(2)}`, '13px', '#ea580c');
     }
+    footerRows += fRow('Discount', `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
   }
 
   // Cash: rounding + Cash Total / Transfer & Cheque: Total only
@@ -1759,7 +1759,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.4');
+  textLines.push('', '— My Sales Calc v1.2.5');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
