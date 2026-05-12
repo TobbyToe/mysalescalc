@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.2</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.3</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -1424,7 +1424,6 @@ function renderLoadInForm() {
 
   const form = document.getElementById('load-in-form');
   // When collapsed+set, track how many loaded rows have been shown
-  let shownLoaded = 0;
   form.innerHTML = ordered.map(p => {
     const stored = loadIn ? (loadIn[p.shorts] || null) : null;
     const boxVal = stored ? (typeof stored === 'object' ? (stored.box || '') : '') : '';
@@ -1434,12 +1433,8 @@ function renderLoadInForm() {
     const hasData = isSet && getLoadedTotal(loadIn, p) > 0;
 
     let extraHidden = '';
-    if (loadInCollapsed && isSet) {
-      if (!hasData || shownLoaded >= 2) {
-        extraHidden = ' hidden';
-      } else {
-        shownLoaded++;
-      }
+    if (loadInCollapsed && isSet && !hasData) {
+      extraHidden = ' hidden';
     }
 
     let inputs;
@@ -1762,7 +1757,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.2');
+  textLines.push('', '— My Sales Calc v1.2.3');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
