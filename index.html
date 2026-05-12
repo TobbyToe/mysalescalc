@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.0</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.1</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -668,19 +668,25 @@ function discLabel(product, isExchange) {
 }
 
 function calcSummary(items) {
-  let subTotal       = 0;
-  let totalAfterDisc = 0;
-  let catADiscAmt    = 0; // Seaweed 10% / 海苔10%折扣额
-  let catBDiscAmt    = 0; // Others global% / 普通产品全局折扣额
+  let subTotal        = 0;
+  let totalAfterDisc  = 0;
+  let seaweedDiscAmt  = 0; // J + P 10% off
+  let nDiscAmt        = 0; // N 10% off (separate line)
+  let catBDiscAmt     = 0; // Others global %
 
   items.forEach(({ product, qty, isExchange }) => {
-    subTotal       += lineSub(product, qty, isExchange);
-    totalAfterDisc += lineAfterDisc(product, qty, isExchange);
-    if (!isExchange && CAT_A.has(product.shorts)) {
-      catADiscAmt += product.price * qty * 0.1;
-    }
-    if (!isExchange && !CAT_A.has(product.shorts) && product.shorts !== 'Salt' && globalDiscount > 0) {
-      catBDiscAmt += product.price * qty * (globalDiscount / 100);
+    const sub = lineSub(product, qty, isExchange);
+    const tot = lineAfterDisc(product, qty, isExchange);
+    subTotal       += sub;
+    totalAfterDisc += tot;
+    if (!isExchange) {
+      if (product.shorts === 'N') {
+        nDiscAmt += sub - tot;
+      } else if (CAT_A.has(product.shorts)) {
+        seaweedDiscAmt += sub - tot;
+      } else if (product.shorts !== 'Salt' && globalDiscount > 0) {
+        catBDiscAmt += product.price * qty * (globalDiscount / 100);
+      }
     }
   });
 
@@ -694,7 +700,7 @@ function calcSummary(items) {
     cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, catADiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
+  return { subTotal, discAmt, seaweedDiscAmt, nDiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
 }
 
 
@@ -812,20 +818,22 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
       dl                                  ? '#2563eb' : '#9ca3af';
     const totStyle  = (!isExchange && sub !== tot) ? 'background:#fef9c3;' : '';
 
-    const du          = discUnitPrice(product, isExchange);
-    const unitDisplay = `$${product.price.toFixed(2)}`;
+    const du             = discUnitPrice(product, isExchange);
+    const unitDisplay    = `$${product.price.toFixed(2)}`;
+    const subDisplay     = isExchange ? '$0.00' : `$${sub.toFixed(2)}`;
     const discUnitDisplay = (!isExchange && du !== product.price) ? `$${du.toFixed(2)}` : '';
-    const totDisplay  = isExchange ? '$0.00' : `$${tot.toFixed(2)}`;
+    const totDisplay     = isExchange ? '$0.00' : `$${tot.toFixed(2)}`;
 
     return `
       <tr style="border-bottom:1px solid #e5e7eb;${rowStyle}">
-        <td style="${F}font-size:12px;color:#9ca3af;padding:7px 3px 7px 5px;text-align:right;">${i + 1}</td>
-        <td style="${F}font-size:15px;padding:7px 3px;text-align:center;">${qty}</td>
-        <td style="${F}font-size:13px;padding:7px 5px;line-height:1.3;">${descCell}</td>
-        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#374151;">${unitDisplay}</td>
-        <td style="${F}font-size:13px;padding:7px 3px;text-align:center;color:${discColor};">${dl}</td>
-        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#ea580c;font-weight:600;">${discUnitDisplay}</td>
-        <td style="${F}font-size:14px;padding:7px 5px 7px 3px;text-align:right;">${totDisplay}</td>
+        <td style="${F}font-size:12px;color:#9ca3af;padding:7px 2px 7px 4px;text-align:right;">${i + 1}</td>
+        <td style="${F}font-size:15px;padding:7px 2px;text-align:center;">${qty}</td>
+        <td style="${F}font-size:13px;padding:7px 4px;line-height:1.3;">${descCell}</td>
+        <td style="${F}font-size:13px;padding:7px 2px;text-align:right;color:#374151;">${unitDisplay}</td>
+        <td style="${F}font-size:13px;padding:7px 2px;text-align:right;color:#374151;">${subDisplay}</td>
+        <td style="${F}font-size:13px;padding:7px 2px;text-align:center;color:${discColor};">${dl}</td>
+        <td style="${F}font-size:13px;padding:7px 2px;text-align:right;color:#ea580c;font-weight:600;">${discUnitDisplay}</td>
+        <td style="${F}font-size:14px;padding:7px 4px 7px 2px;text-align:right;">${totDisplay}</td>
       </tr>`;
   }).join('');
 
@@ -853,8 +861,11 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     if (s.catBDiscAmt > 0) {
       footerRows += fRow(`↳ Others ${globalDiscount}% Off`, `-$${s.catBDiscAmt.toFixed(2)}`, '13px', '#2563eb');
     }
-    if (s.catADiscAmt > 0) {
-      footerRows += fRow('↳ Seaweed 10% Off', `-$${s.catADiscAmt.toFixed(2)}`, '13px', '#ea580c');
+    if (s.seaweedDiscAmt > 0) {
+      footerRows += fRow('↳ Seaweed 10% Off', `-$${s.seaweedDiscAmt.toFixed(2)}`, '13px', '#ea580c');
+    }
+    if (s.nDiscAmt > 0) {
+      footerRows += fRow('↳ N 10% Off', `-$${s.nDiscAmt.toFixed(2)}`, '13px', '#ea580c');
     }
   }
 
@@ -898,13 +909,14 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
       <table style="width:100%;border-collapse:collapse;border-top:1.5px solid #d1d5db;">
         <thead>
           <tr style="background:#f3f4f6;border-bottom:1.5px solid #d1d5db;">
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px 7px 5px;text-align:right;width:20px;">#</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:34px;">QTY</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px;text-align:left;">Description</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:48px;">Unit $</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:36px;">Disc</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:48px;">@ $</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px 7px 3px;text-align:right;width:58px;">Total $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px 7px 4px;text-align:right;width:18px;">#</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px;text-align:center;width:32px;">QTY</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 4px;text-align:left;">Description</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px;text-align:right;width:44px;">Unit $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px;text-align:right;width:50px;">Sub $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px;text-align:center;width:34px;">Disc</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 2px;text-align:right;width:44px;">@ $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 4px 7px 2px;text-align:right;width:54px;">Total $</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
@@ -1410,27 +1422,36 @@ function renderLoadInForm() {
     `load-in-input w-14 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}`;
 
   const form = document.getElementById('load-in-form');
+  // When collapsed+set, track how many loaded rows have been shown
+  let shownLoaded = 0;
   form.innerHTML = ordered.map(p => {
     const stored = loadIn ? (loadIn[p.shorts] || null) : null;
     const boxVal = stored ? (typeof stored === 'object' ? (stored.box || '') : '') : '';
     const eaVal  = stored ? (typeof stored === 'object' ? (stored.ea  || '') : stored) : '';
     const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
     const dis    = isSet ? 'disabled' : '';
+    const hasData = isSet && getLoadedTotal(loadIn, p) > 0;
+
+    let extraHidden = '';
+    if (loadInCollapsed && isSet) {
+      if (!hasData || shownLoaded >= 2) {
+        extraHidden = ' hidden';
+      } else {
+        shownLoaded++;
+      }
+    }
 
     let inputs;
     if (EA_ONLY.has(p.shorts)) {
-      // Single ea input only / 只有个数输入
       inputs = `<input type="number" min="0" inputmode="numeric"
         class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="ea"
         value="${eaVal}" ${dis} placeholder="0">`;
     } else if (BOX_ONLY.has(p.shorts)) {
-      // Single box input with ×N label / 只有箱数输入
       inputs = `<input type="number" min="0" inputmode="numeric"
         class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
         value="${boxVal}" ${dis} placeholder="0">
         <span class="text-xs text-gray-400">×${p.eaBox}</span>`;
     } else {
-      // Both box + ea / 箱数 + 散个数
       inputs = `<input type="number" min="0" inputmode="numeric"
         class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
         value="${boxVal}" ${dis} placeholder="0">
@@ -1440,9 +1461,8 @@ function renderLoadInForm() {
         value="${eaVal}" ${dis} placeholder="ea">`;
     }
 
-    const extraHidden = (loadInCollapsed && isSet && idx >= 2) ? ' hidden' : '';
     return `
-      <div class="flex items-center py-2 border-b border-gray-50 last:border-0${extraHidden}" data-load-idx="${idx}">
+      <div class="flex items-center py-2 border-b border-gray-50 last:border-0${extraHidden}" data-load-shorts="${p.shorts}">
         <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
         <span class="text-xs text-gray-600 flex-1 min-w-0 truncate pr-1">${p.name}</span>
         <div class="flex items-center gap-1 shrink-0">${inputs}</div>
@@ -1460,14 +1480,8 @@ function renderLoadInForm() {
 
 function toggleLoadInCollapse() {
   loadInCollapsed = !loadInCollapsed;
-  document.querySelectorAll('#load-in-form [data-load-idx]').forEach(el => {
-    if (parseInt(el.dataset.loadIdx) >= 2) el.classList.toggle('hidden', loadInCollapsed);
-  });
-  const icon = document.getElementById('icon-toggle-load');
-  if (icon) {
-    icon.setAttribute('data-lucide', loadInCollapsed ? 'chevron-down' : 'chevron-up');
-    lucide.createIcons({ nodes: [icon] });
-  }
+  // Re-render so collapsed logic (first 2 loaded rows) applies correctly
+  renderLoadInForm();
 }
 
 function saveLoadIn() {
@@ -1747,7 +1761,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.0');
+  textLines.push('', '— My Sales Calc v1.2.1');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
