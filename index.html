@@ -1502,6 +1502,8 @@ function saveLoadIn() {
 
 function editLoadIn() {
   loadInCollapsed = false;
+  renderLoadInForm();  // re-renders full table with all rows visible
+  // Override renderLoadInForm's isSet-based button/input state for editing
   document.getElementById('btn-edit-load').classList.add('hidden');
   document.getElementById('btn-save-load').classList.remove('hidden');
   document.querySelectorAll('.load-in-input').forEach(inp => {
