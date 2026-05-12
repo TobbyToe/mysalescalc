@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.1.7</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.0</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -646,12 +646,17 @@ function lineSub(product, qty, isExchange) {
   return product.price * qty;
 }
 
+// Discounted unit price: Cat A rounds UP to nearest $0.05, Cat B rounds to cent
+function discUnitPrice(product, isExchange) {
+  if (isExchange || product.shorts === 'Salt') return product.price;
+  if (CAT_A.has(product.shorts)) return Math.ceil(product.price * 0.9 * 20) / 20;
+  if (globalDiscount > 0) return Math.round(product.price * (1 - globalDiscount / 100) * 100) / 100;
+  return product.price;
+}
+
 function lineAfterDisc(product, qty, isExchange) {
   if (isExchange) return 0;
-  // Round each line to nearest cent so sum matches displayed line totals
-  if (CAT_A.has(product.shorts)) return Math.round(product.price * qty * 0.9 * 100) / 100;
-  if (product.shorts !== 'Salt' && globalDiscount > 0) return Math.round(product.price * qty * (1 - globalDiscount / 100) * 100) / 100;
-  return Math.round(product.price * qty * 100) / 100;
+  return Math.round(discUnitPrice(product, isExchange) * qty * 100) / 100;
 }
 
 function discLabel(product, isExchange) {
@@ -807,8 +812,9 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
       dl                                  ? '#2563eb' : '#9ca3af';
     const totStyle  = (!isExchange && sub !== tot) ? 'background:#fef9c3;' : '';
 
+    const du          = discUnitPrice(product, isExchange);
     const unitDisplay = `$${product.price.toFixed(2)}`;
-    const subDisplay  = isExchange ? '$0.00' : `$${sub.toFixed(2)}`;
+    const discUnitDisplay = (!isExchange && du !== product.price) ? `$${du.toFixed(2)}` : '';
     const totDisplay  = isExchange ? '$0.00' : `$${tot.toFixed(2)}`;
 
     return `
@@ -817,9 +823,9 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
         <td style="${F}font-size:15px;padding:7px 3px;text-align:center;">${qty}</td>
         <td style="${F}font-size:13px;padding:7px 5px;line-height:1.3;">${descCell}</td>
         <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#374151;">${unitDisplay}</td>
-        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#374151;">${subDisplay}</td>
         <td style="${F}font-size:13px;padding:7px 3px;text-align:center;color:${discColor};">${dl}</td>
-        <td style="${F}font-size:14px;padding:7px 5px 7px 3px;text-align:right;${totStyle}">${totDisplay}</td>
+        <td style="${F}font-size:13px;padding:7px 3px;text-align:right;color:#ea580c;font-weight:600;">${discUnitDisplay}</td>
+        <td style="${F}font-size:14px;padding:7px 5px 7px 3px;text-align:right;">${totDisplay}</td>
       </tr>`;
   }).join('');
 
@@ -892,13 +898,13 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
       <table style="width:100%;border-collapse:collapse;border-top:1.5px solid #d1d5db;">
         <thead>
           <tr style="background:#f3f4f6;border-bottom:1.5px solid #d1d5db;">
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px 7px 5px;text-align:right;width:24px;">#</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:38px;">QTY</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px 7px 5px;text-align:right;width:20px;">#</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:34px;">QTY</th>
             <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px;text-align:left;">Description</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:52px;">Unit $</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:58px;">Sub $</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:42px;">Disc</th>
-            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px 7px 3px;text-align:right;width:62px;">Total $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:48px;">Unit $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:center;width:36px;">Disc</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 3px;text-align:right;width:48px;">@ $</th>
+            <th style="${F}font-size:11px;color:#6b7280;padding:7px 5px 7px 3px;text-align:right;width:58px;">Total $</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
@@ -1372,7 +1378,7 @@ function switchTab(tab) {
 // --- Load-In / 出货录入 ---
 
 // Priority order for the load-in form / 出货录入的产品显示顺序
-const VAN_ORDER = ['C','WC','95','1.5','V','RKC','BOC','SS','DRS','BF','RSS','FG','SQ','N','GG','PG','J','P','S','VS','M','B'];
+const VAN_ORDER = ['C','WC','95','1.5','V','RKC','N','BOC','SS','DRS','BF','RSS','FG','SQ','GG','PG','J','P','S','VS','M','B'];
 
 // ea-only: sold loose, no box concept / 只卖散货，无整箱概念
 const EA_ONLY  = new Set(['SS','DRS','BF','RSS','FG','SQ','GG','PG','PGS','CG','LR','SO','0.5lb','1lb','2lb','5lb']);
@@ -1434,28 +1440,29 @@ function renderLoadInForm() {
         value="${eaVal}" ${dis} placeholder="ea">`;
     }
 
+    const extraHidden = (loadInCollapsed && isSet && idx >= 2) ? ' hidden' : '';
     return `
-      <div class="flex items-center py-2 border-b border-gray-50 last:border-0">
+      <div class="flex items-center py-2 border-b border-gray-50 last:border-0${extraHidden}" data-load-idx="${idx}">
         <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
         <span class="text-xs text-gray-600 flex-1 min-w-0 truncate pr-1">${p.name}</span>
         <div class="flex items-center gap-1 shrink-0">${inputs}</div>
       </div>`;
   }).join('');
 
-  // Apply collapsed state
-  const collapsed = loadInCollapsed && isSet;
-  document.getElementById('load-in-form').classList.toggle('hidden', collapsed);
+  // Apply collapsed state — always show form, hide rows idx >= 2 when collapsed
+  document.getElementById('load-in-form').classList.remove('hidden');
   const icon = document.getElementById('icon-toggle-load');
   if (icon) {
-    icon.setAttribute('data-lucide', collapsed ? 'chevron-down' : 'chevron-up');
+    icon.setAttribute('data-lucide', (loadInCollapsed && isSet) ? 'chevron-down' : 'chevron-up');
     lucide.createIcons({ nodes: [icon] });
   }
 }
 
 function toggleLoadInCollapse() {
   loadInCollapsed = !loadInCollapsed;
-  const form = document.getElementById('load-in-form');
-  form.classList.toggle('hidden', loadInCollapsed);
+  document.querySelectorAll('#load-in-form [data-load-idx]').forEach(el => {
+    if (parseInt(el.dataset.loadIdx) >= 2) el.classList.toggle('hidden', loadInCollapsed);
+  });
   const icon = document.getElementById('icon-toggle-load');
   if (icon) {
     icon.setAttribute('data-lucide', loadInCollapsed ? 'chevron-down' : 'chevron-up');
@@ -1740,7 +1747,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.1.7');
+  textLines.push('', '— My Sales Calc v1.2.0');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
