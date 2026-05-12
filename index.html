@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.1</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.2</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -872,6 +872,7 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
   // Cash: rounding + Cash Total / Transfer & Cheque: Total only
   if (paymentType === 'cash') {
     if (s.cashRounding !== 0) {
+      footerRows += fRow('Total', `$${s.totalAfterDisc.toFixed(2)}`, '16px', '#374151');
       const absR = Math.abs(s.cashRounding).toFixed(2);
       const sign = s.cashRounding > 0 ? '+$' : '-$';
       footerRows += fRow('Cash Rounding', `${sign}${absR}`, '13px', '#9ca3af');
@@ -1761,7 +1762,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.1');
+  textLines.push('', '— My Sales Calc v1.2.2');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
