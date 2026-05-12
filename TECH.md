@@ -1,11 +1,39 @@
 # My Sales Calc — Technical Reference / 技术参考文档
 
 > 自维护用途 · Self-maintenance reference  
-> Last updated: 2026-05-09
+> Last updated: 2026-05-12
 
 ---
 
 ## Changelog / 版本记录
+
+### v1.2.2 – v1.2.5 — Invoice & Van fixes / 发票·车销修复 (2026-05-12)
+
+**v1.2.5**
+- Invoice footer: discount breakdown lines (Seaweed 10% Off / Others 2% Off) now appear **before** the Discount summary line
+
+**v1.2.4**
+- Edit load-in: shows full product table with all rows enabled (not just the 2-row preview)
+- Confirm load-in: all loaded rows visible after confirming (not just top 2)
+
+**v1.2.3**
+- Load-in confirm: all loaded rows now shown after confirm (regression fix)
+
+**v1.2.2**
+- Invoice footer: Total line now appears **before** Cash Rounding line (correct order)
+
+### v1.2.0 – v1.2.1 — Discount columns & Van improvements / 折扣列·车销改进 (2026-05-09)
+
+**v1.2.1**
+- Invoice body: added Sub$ and Disc$ columns showing unit price and per-line discount amount
+- Seaweed (Cat A) and N-category discount shown as separate breakdown lines in footer
+- Load-in collapse fixed after Confirm
+
+**v1.2.0**
+- Discount unit price column added
+- Cat A items rounded up to nearest $0.05 after 10% discount
+- `N` shortcode added to `VAN_ORDER`
+- Load-in preview shows 2 rows before Confirm
 
 ### v3.0 — History, Expenses, Auth / 历史增强·费用·登录 (2026-05-09)
 **New features / 新功能：**
