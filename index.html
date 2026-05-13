@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.5</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.6</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -673,22 +673,31 @@ function calcSummary(items) {
   let seaweedDiscAmt  = 0; // J + P 10% off
   let nDiscAmt        = 0; // N 10% off (separate line)
   let catBDiscAmt     = 0; // Others global %
+  let catBSubTotal    = 0; // Cat B full-price subtotal (for subtotal-level discount / 小计层面统一折扣)
 
   items.forEach(({ product, qty, isExchange }) => {
     const sub = lineSub(product, qty, isExchange);
     const tot = lineAfterDisc(product, qty, isExchange);
-    subTotal       += sub;
-    totalAfterDisc += tot;
+    subTotal += sub;
     if (!isExchange) {
       if (product.shorts === 'N') {
         nDiscAmt += sub - tot;
+        totalAfterDisc += tot;
       } else if (CAT_A.has(product.shorts)) {
         seaweedDiscAmt += sub - tot;
+        totalAfterDisc += tot;
       } else if (product.shorts !== 'Salt' && globalDiscount > 0) {
-        catBDiscAmt += product.price * qty * (globalDiscount / 100);
+        catBSubTotal += sub; // accumulate at full price; discount applied after loop
+      } else {
+        totalAfterDisc += tot; // Salt or Cat B with no global discount
       }
     }
   });
+
+  // Apply Cat B global discount at subtotal level to avoid per-line rounding drift
+  // 在小计层面统一计算全局折扣，避免逐行四舍五入累积误差
+  catBDiscAmt = Math.round(catBSubTotal * globalDiscount / 100 * 100) / 100;
+  totalAfterDisc += catBSubTotal - catBDiscAmt;
 
   const discAmt = subTotal - totalAfterDisc;
 
@@ -1759,7 +1768,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.5');
+  textLines.push('', '— My Sales Calc v1.2.6');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
