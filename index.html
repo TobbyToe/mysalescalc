@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.6</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.7</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -562,6 +562,7 @@ let currentTab      = 'sales';
 let selectedKeys    = new Set();
 let dayMap          = {};   // dateStr → [invNum, ...]
 let loadInCollapsed = false;
+let loadInEditing   = false;
 let expenses        = { lunch: 0, petrol: 0, others: 0, others2: 0, label1: '', label2: '' };
 
 
@@ -1407,7 +1408,8 @@ const EA_ONLY  = new Set(['SS','DRS','BF','RSS','FG','SQ','GG','PG','PGS','CG','
 // box-only: always sold by full box / 只按整箱卖
 const BOX_ONLY = new Set(['S','VS','M','B','J','P']);
 
-const LOAD_IN_KEY = () => `loadIn_${getTodayPrefix()}`;
+const LOAD_IN_KEY       = () => `loadIn_${getTodayPrefix()}`;
+const LOAD_IN_DRAFT_KEY = () => `loadInDraft_${getTodayPrefix()}`;
 
 function getLoadIn() {
   const d = localStorage.getItem(LOAD_IN_KEY());
@@ -1415,72 +1417,103 @@ function getLoadIn() {
 }
 
 function renderLoadInForm() {
-  const loadIn = getLoadIn();
-  const isSet  = loadIn !== null;
+  const loadIn    = getLoadIn();
+  const isSet     = loadIn !== null;
+  const showInput = !isSet || loadInEditing;
 
-  document.getElementById('btn-edit-load').classList.toggle('hidden', !isSet);
-  document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
-  document.getElementById('btn-toggle-load').classList.toggle('hidden', !isSet);
+  document.getElementById('btn-edit-load').classList.toggle('hidden', showInput);
+  document.getElementById('btn-save-load').classList.toggle('hidden', !showInput);
+  document.getElementById('btn-toggle-load').classList.toggle('hidden', showInput);
 
-  // Priority first, then remaining products / 优先列表在前，其余产品在后
+  const form = document.getElementById('load-in-form');
+
+  if (showInput) {
+    // Textarea input mode — same shortcode format as Sales page, no store name line
+    // 文本输入模式 — 与Sales页相同的快捷码格式，无需首行店名
+    const draft = localStorage.getItem(LOAD_IN_DRAFT_KEY()) || '';
+    form.innerHTML = `
+      <textarea id="load-in-textarea" rows="7"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 font-mono bg-white resize-none focus:outline-none focus:border-blue-400"
+        placeholder="c3box&#10;wc2box&#10;95 5&#10;v 1box&#10;ss 20"
+        style="line-height:1.7;caret-color:#2563eb;font-size:16px;"
+      >${draft}</textarea>
+      <div id="load-in-warnings" class="mt-1 space-y-0.5"></div>`;
+    const ta = document.getElementById('load-in-textarea');
+    ta.addEventListener('input', () => {
+      localStorage.setItem(LOAD_IN_DRAFT_KEY(), ta.value);
+      renderLoadInWarnings(ta.value);
+    });
+    renderLoadInWarnings(draft);
+    return;
+  }
+
+  // Confirmed mode: show loaded items list / 已确认：显示出货清单
   const ordered = [
     ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
     ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
   ];
+  const loaded = ordered.filter(p => getLoadedTotal(loadIn, p) > 0);
 
-  const inputCls = (disCls) =>
-    `load-in-input w-14 text-center text-sm font-bold border border-gray-200 rounded-lg px-1 py-1.5 ${disCls}`;
+  if (!loaded.length) {
+    form.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No items loaded</p>';
+  } else if (loadInCollapsed) {
+    const preview = loaded.slice(0, 4).map(p => p.shorts).join(', ');
+    form.innerHTML = `<p class="text-xs text-gray-400 py-1">${loaded.length} products: ${preview}${loaded.length > 4 ? '…' : ''}</p>`;
+  } else {
+    form.innerHTML = loaded.map(p => {
+      const qty = getLoadedTotal(loadIn, p);
+      return `
+        <div class="flex items-center py-1.5 border-b border-gray-50 last:border-0">
+          <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
+          <span class="text-xs text-gray-600 flex-1 min-w-0 truncate">${p.name}</span>
+          <span class="text-xs font-bold text-gray-700 ml-2">${fmtBoxEa(qty, p)}</span>
+        </div>`;
+    }).join('');
+  }
 
-  const form = document.getElementById('load-in-form');
-  // When collapsed+set, track how many loaded rows have been shown
-  form.innerHTML = ordered.map(p => {
-    const stored = loadIn ? (loadIn[p.shorts] || null) : null;
-    const boxVal = stored ? (typeof stored === 'object' ? (stored.box || '') : '') : '';
-    const eaVal  = stored ? (typeof stored === 'object' ? (stored.ea  || '') : stored) : '';
-    const disCls = isSet ? 'bg-gray-50 text-gray-400' : 'bg-white';
-    const dis    = isSet ? 'disabled' : '';
-    const hasData = isSet && getLoadedTotal(loadIn, p) > 0;
-
-    let extraHidden = '';
-    if (loadInCollapsed && isSet && !hasData) {
-      extraHidden = ' hidden';
-    }
-
-    let inputs;
-    if (EA_ONLY.has(p.shorts)) {
-      inputs = `<input type="number" min="0" inputmode="numeric"
-        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="ea"
-        value="${eaVal}" ${dis} placeholder="0">`;
-    } else if (BOX_ONLY.has(p.shorts)) {
-      inputs = `<input type="number" min="0" inputmode="numeric"
-        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
-        value="${boxVal}" ${dis} placeholder="0">
-        <span class="text-xs text-gray-400">×${p.eaBox}</span>`;
-    } else {
-      inputs = `<input type="number" min="0" inputmode="numeric"
-        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="box"
-        value="${boxVal}" ${dis} placeholder="0">
-        <span class="text-xs text-gray-400">×${p.eaBox}</span>
-        <input type="number" min="0" inputmode="numeric"
-        class="${inputCls(disCls)}" data-shorts="${p.shorts}" data-type="ea"
-        value="${eaVal}" ${dis} placeholder="ea">`;
-    }
-
-    return `
-      <div class="flex items-center py-2 border-b border-gray-50 last:border-0${extraHidden}" data-load-shorts="${p.shorts}">
-        <span class="text-xs font-mono font-bold text-blue-500 w-10 shrink-0">${p.shorts}</span>
-        <span class="text-xs text-gray-600 flex-1 min-w-0 truncate pr-1">${p.name}</span>
-        <div class="flex items-center gap-1 shrink-0">${inputs}</div>
-      </div>`;
-  }).join('');
-
-  // Apply collapsed state — always show form, hide rows idx >= 2 when collapsed
-  document.getElementById('load-in-form').classList.remove('hidden');
   const icon = document.getElementById('icon-toggle-load');
   if (icon) {
-    icon.setAttribute('data-lucide', (loadInCollapsed && isSet) ? 'chevron-down' : 'chevron-up');
+    icon.setAttribute('data-lucide', loadInCollapsed ? 'chevron-down' : 'chevron-up');
     lucide.createIcons({ nodes: [icon] });
   }
+}
+
+// Parse textarea text and show warnings for unrecognized lines
+// 解析文本并对无法识别的行显示警告
+function renderLoadInWarnings(text) {
+  const el = document.getElementById('load-in-warnings');
+  if (!el) return;
+  const warns = text.split('\n').map(l => l.trim()).filter(Boolean).filter(line => parseCommand(line).error);
+  el.innerHTML = warns.map(w =>
+    `<div class="text-xs text-yellow-600 bg-yellow-50 rounded px-2 py-0.5">⚠ Unknown: ${w}</div>`
+  ).join('');
+}
+
+// Reconstruct textarea text from stored loadIn data (for Edit mode)
+// 从存储的出货数据还原文本（用于编辑模式）
+function reconstructLoadInText(loadIn) {
+  const lines = [];
+  const ordered = [
+    ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
+    ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+  ];
+  ordered.forEach(p => {
+    const val = loadIn[p.shorts];
+    if (!val) return;
+    const totalEa = typeof val === 'number'
+      ? val
+      : (val.box || 0) * p.eaBox + (val.ea || 0);
+    if (totalEa <= 0) return;
+    if (!EA_ONLY.has(p.shorts) && p.eaBox > 1) {
+      const boxes = Math.floor(totalEa / p.eaBox);
+      const ea    = totalEa % p.eaBox;
+      if (boxes > 0) lines.push(`${p.shorts}${boxes}box`);
+      if (ea    > 0) lines.push(`${p.shorts}${ea}`);
+    } else {
+      lines.push(`${p.shorts}${totalEa}`);
+    }
+  });
+  return lines.join('\n');
 }
 
 function toggleLoadInCollapse() {
@@ -1490,36 +1523,29 @@ function toggleLoadInCollapse() {
 }
 
 function saveLoadIn() {
+  const ta = document.getElementById('load-in-textarea');
+  if (!ta) return;
   const data = {};
-  document.querySelectorAll('.load-in-input').forEach(inp => {
-    const shorts = inp.dataset.shorts;
-    const type   = inp.dataset.type; // 'box' or 'ea'
-    const val    = parseInt(inp.value, 10) || 0;
-    if (!data[shorts]) data[shorts] = { box: 0, ea: 0 };
-    data[shorts][type] = val;
+  ta.value.split('\n').forEach(line => {
+    const r = parseCommand(line);
+    if (!r.error && !r.isExchange)
+      data[r.product.shorts] = (data[r.product.shorts] || 0) + r.qty;
   });
-  // Drop products with zero total / 总数为零的不存储
-  Object.keys(data).forEach(shorts => {
-    const product = PRODUCTS.find(p => p.shorts === shorts);
-    if (!product || (data[shorts].box * product.eaBox + data[shorts].ea) === 0)
-      delete data[shorts];
-  });
+  // Drop zero entries / 移除数量为零的条目
+  Object.keys(data).forEach(k => { if (!data[k]) delete data[k]; });
   localStorage.setItem(LOAD_IN_KEY(), JSON.stringify(data));
+  localStorage.removeItem(LOAD_IN_DRAFT_KEY());
+  loadInEditing   = false;
   loadInCollapsed = true;
   renderVanPage();
 }
 
 function editLoadIn() {
+  const loadIn = getLoadIn();
+  if (loadIn) localStorage.setItem(LOAD_IN_DRAFT_KEY(), reconstructLoadInText(loadIn));
+  loadInEditing   = true;
   loadInCollapsed = false;
-  renderLoadInForm();  // re-renders full table with all rows visible
-  // Override renderLoadInForm's isSet-based button/input state for editing
-  document.getElementById('btn-edit-load').classList.add('hidden');
-  document.getElementById('btn-save-load').classList.remove('hidden');
-  document.querySelectorAll('.load-in-input').forEach(inp => {
-    inp.disabled = false;
-    inp.classList.remove('bg-gray-50', 'text-gray-400');
-    inp.classList.add('bg-white');
-  });
+  renderLoadInForm();
 }
 
 // Format qty as box+ea string for clipboard text / 格式化为"箱+个"
@@ -1768,7 +1794,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.6');
+  textLines.push('', '— My Sales Calc v1.2.7');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
