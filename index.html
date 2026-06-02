@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.10</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.11</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -537,10 +537,10 @@ const PRODUCTS = [
   { no:49, shorts:'BP',    name:'BBQ Pork Bun',                       price:11.60, eaBox:3  },
   { no:50, shorts:'GB',    name:'Beef & Ginger Gyoza',                price:12.30, eaBox:3  },
   { no:51, shorts:'GP',    name:'Free Range Pork Gyoza',              price:12.30, eaBox:3  },
-  { no:52, shorts:'S',     name:'bibigo Sliced Kimchi 400g',          price:5.80,  eaBox:6  },
+  { no:52, shorts:'S',     name:'bibigo Sliced Kimchi 400g',          price:6.40,  eaBox:6  },
   { no:53, shorts:'VS',    name:'bibigo Vegan Sliced Kimchi 400g',    price:6.90,  eaBox:6  },
-  { no:54, shorts:'M',     name:'bibigo Sliced Kimchi 900g',          price:7.50,  eaBox:8  },
-  { no:55, shorts:'B',     name:'bibigo Sliced Kimchi 1.4kg',         price:16.50, eaBox:6  },
+  { no:54, shorts:'M',     name:'bibigo Sliced Kimchi 900g',          price:12.80, eaBox:8  },
+  { no:55, shorts:'B',     name:'bibigo Sliced Kimchi 1.4kg',         price:17.50, eaBox:6  },
   { no:56, shorts:'0.5lb', name:'Chilli Powder 227g',                 price:3.15,  eaBox:65 },
   { no:57, shorts:'1lb',   name:'Chilli Powder 454g',                 price:5.40,  eaBox:36 },
   { no:58, shorts:'2lb',   name:'Chilli Powder 908g',                 price:10.45, eaBox:18 },
@@ -1787,7 +1787,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.10');
+  textLines.push('', '— My Sales Calc v1.2.11');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
