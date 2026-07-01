@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.14</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.15</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -556,6 +556,8 @@ const CAT_A = new Set(['P', 'J']);
 const SPECIAL_PRICE = new Set(['Salt']);
 // Category 20: auto 20% off, excluded from global discount / 固定8折，不参与全局折扣
 const CAT_20 = new Set(['N20', '9520', '1.520']);
+// Inventory alias: special-price variants share stock with base product / 特价款走基础产品库存
+const INVENTORY_ALIAS = { 'N20': 'N', '9520': '95', '1.520': '1.5' };
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
@@ -1454,10 +1456,10 @@ function renderLoadInForm() {
   document.getElementById('btn-save-load').classList.toggle('hidden', isSet);
   document.getElementById('btn-toggle-load').classList.toggle('hidden', !isSet);
 
-  // Priority first, then remaining products / 优先列表在前，其余产品在后
+  // Priority first, then remaining products (exclude alias products) / 优先列表在前，别名产品不单独列出
   const ordered = [
     ...VAN_ORDER.map(s => PRODUCTS.find(p => p.shorts === s)).filter(Boolean),
-    ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts)),
+    ...PRODUCTS.filter(p => !VAN_ORDER.includes(p.shorts) && !INVENTORY_ALIAS[p.shorts]),
   ];
 
   const inputCls = (disCls) =>
@@ -1594,7 +1596,8 @@ function calcSoldQty(invoices) {
       if (!line.trim()) return;
       const r = parseCommand(line);
       if (r.error || r.isExchange) return; // exchange items don't count as sold / 换货不计入已售
-      sold[r.product.shorts] = (sold[r.product.shorts] || 0) + r.qty;
+      const trackShorts = INVENTORY_ALIAS[r.product.shorts] || r.product.shorts;
+      sold[trackShorts] = (sold[trackShorts] || 0) + r.qty;
     });
   });
   return sold;
@@ -1796,7 +1799,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.14');
+  textLines.push('', '— My Sales Calc v1.2.15');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
