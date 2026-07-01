@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.11</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.12</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -548,7 +548,7 @@ const PRODUCTS = [
 ];
 
 // Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
-const CAT_A = new Set(['P', 'J', 'N']);
+const CAT_A = new Set(['P', 'J']);
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
@@ -671,7 +671,6 @@ function calcSummary(items) {
   let subTotal        = 0;
   let totalAfterDisc  = 0;
   let seaweedDiscAmt  = 0; // J + P 10% off
-  let nDiscAmt        = 0; // N 10% off (separate line)
   let catBDiscAmt     = 0; // Others global %
   let catBSubTotal    = 0; // Cat B full-price subtotal (for subtotal-level discount / 小计层面统一折扣)
 
@@ -680,10 +679,7 @@ function calcSummary(items) {
     const tot = lineAfterDisc(product, qty, isExchange);
     subTotal += sub;
     if (!isExchange) {
-      if (product.shorts === 'N') {
-        nDiscAmt += sub - tot;
-        totalAfterDisc += tot;
-      } else if (CAT_A.has(product.shorts)) {
+      if (CAT_A.has(product.shorts)) {
         seaweedDiscAmt += sub - tot;
         totalAfterDisc += tot;
       } else if (product.shorts !== 'Salt' && globalDiscount > 0) {
@@ -709,7 +705,7 @@ function calcSummary(items) {
     cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, seaweedDiscAmt, nDiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
+  return { subTotal, discAmt, seaweedDiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
 }
 
 
@@ -872,9 +868,7 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     if (s.seaweedDiscAmt > 0) {
       footerRows += fRow('↳ Seaweed 10% Off', `-$${s.seaweedDiscAmt.toFixed(2)}`, '13px', '#ea580c');
     }
-    if (s.nDiscAmt > 0) {
-      footerRows += fRow('↳ N 10% Off', `-$${s.nDiscAmt.toFixed(2)}`, '13px', '#ea580c');
-    }
+
     footerRows += fRow('Discount', `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
   }
 
@@ -1787,7 +1781,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.11');
+  textLines.push('', '— My Sales Calc v1.2.12');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
