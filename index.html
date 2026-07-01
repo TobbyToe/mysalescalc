@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.12</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.13</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -545,10 +545,15 @@ const PRODUCTS = [
   { no:57, shorts:'1lb',   name:'Chilli Powder 454g',                 price:5.40,  eaBox:36 },
   { no:58, shorts:'2lb',   name:'Chilli Powder 908g',                 price:10.45, eaBox:18 },
   { no:59, shorts:'5lb',   name:'Chilli Powder 2.27kg',               price:24.75, eaBox:8  },
+  { no:60, shorts:'N20',   name:'Mat Kimchi Sliced 400g 20%off',      price:5.12,  eaBox:20 },
+  { no:61, shorts:'9520',  name:'Mat Kimchi Sliced 950g 20%off',      price:11.04, eaBox:8  },
+  { no:62, shorts:'1.520', name:'Mat Kimchi Sliced 1.5kg 20%off',     price:15.12, eaBox:8  },
 ];
 
 // Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
 const CAT_A = new Set(['P', 'J']);
+// Special price products: price already discounted, excluded from global discount / 已含特价，不参与全局折扣
+const SPECIAL_PRICE = new Set(['Salt', 'N20', '9520', '1.520']);
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
@@ -648,7 +653,7 @@ function lineSub(product, qty, isExchange) {
 
 // Discounted unit price: Cat A rounds UP to nearest $0.05, Cat B rounds to cent
 function discUnitPrice(product, isExchange) {
-  if (isExchange || product.shorts === 'Salt') return product.price;
+  if (isExchange || SPECIAL_PRICE.has(product.shorts)) return product.price;
   if (CAT_A.has(product.shorts)) return Math.ceil(product.price * 0.9 * 20) / 20;
   if (globalDiscount > 0) return Math.round(product.price * (1 - globalDiscount / 100) * 100) / 100;
   return product.price;
@@ -662,7 +667,7 @@ function lineAfterDisc(product, qty, isExchange) {
 function discLabel(product, isExchange) {
   if (isExchange)                return '-';
   if (CAT_A.has(product.shorts)) return '10%';
-  if (product.shorts === 'Salt') return 'Special';
+  if (SPECIAL_PRICE.has(product.shorts)) return 'Special';
   if (globalDiscount > 0)        return `${globalDiscount}%`;
   return '';
 }
@@ -682,7 +687,7 @@ function calcSummary(items) {
       if (CAT_A.has(product.shorts)) {
         seaweedDiscAmt += sub - tot;
         totalAfterDisc += tot;
-      } else if (product.shorts !== 'Salt' && globalDiscount > 0) {
+      } else if (!SPECIAL_PRICE.has(product.shorts) && globalDiscount > 0) {
         catBSubTotal += sub; // accumulate at full price; discount applied after loop
       } else {
         totalAfterDisc += tot; // Salt or Cat B with no global discount
@@ -1781,7 +1786,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.12');
+  textLines.push('', '— My Sales Calc v1.2.13');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
