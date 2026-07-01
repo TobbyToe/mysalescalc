@@ -83,7 +83,7 @@
   <div class="max-w-lg mx-auto flex items-center justify-between px-3" style="height:24px;">
     <span style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:.05em;">
       <span style="color:#6ee7b7;">●</span> admin
-      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.13</span>
+      <span style="color:#475e80;font-weight:400;margin-left:6px;">v1.2.14</span>
     </span>
     <button onclick="doLogout()" style="color:#93c5fd;font-size:11px;background:none;border:none;cursor:pointer;padding:0;font-weight:500;">
       Log out
@@ -545,15 +545,17 @@ const PRODUCTS = [
   { no:57, shorts:'1lb',   name:'Chilli Powder 454g',                 price:5.40,  eaBox:36 },
   { no:58, shorts:'2lb',   name:'Chilli Powder 908g',                 price:10.45, eaBox:18 },
   { no:59, shorts:'5lb',   name:'Chilli Powder 2.27kg',               price:24.75, eaBox:8  },
-  { no:60, shorts:'N20',   name:'Mat Kimchi Sliced 400g 20%off',      price:5.12,  eaBox:20 },
-  { no:61, shorts:'9520',  name:'Mat Kimchi Sliced 950g 20%off',      price:11.04, eaBox:8  },
-  { no:62, shorts:'1.520', name:'Mat Kimchi Sliced 1.5kg 20%off',     price:15.12, eaBox:8  },
+  { no:60, shorts:'N20',   name:'Mat Kimchi Sliced 400g 20%off',      price:6.40,  eaBox:20 },
+  { no:61, shorts:'9520',  name:'Mat Kimchi Sliced 950g 20%off',      price:13.80, eaBox:8  },
+  { no:62, shorts:'1.520', name:'Mat Kimchi Sliced 1.5kg 20%off',     price:18.90, eaBox:8  },
 ];
 
 // Category A: auto 10% off, excluded from global discount / 固定9折，不参与全局折扣
 const CAT_A = new Set(['P', 'J']);
-// Special price products: price already discounted, excluded from global discount / 已含特价，不参与全局折扣
-const SPECIAL_PRICE = new Set(['Salt', 'N20', '9520', '1.520']);
+// Special price products: excluded from global discount / 不参与全局折扣
+const SPECIAL_PRICE = new Set(['Salt']);
+// Category 20: auto 20% off, excluded from global discount / 固定8折，不参与全局折扣
+const CAT_20 = new Set(['N20', '9520', '1.520']);
 
 // Longest-match parsing: sort by shortcode length descending / 最长匹配：按快捷码长度降序
 const SORTED_PRODUCTS = [...PRODUCTS].sort((a, b) => b.shorts.length - a.shorts.length);
@@ -655,6 +657,7 @@ function lineSub(product, qty, isExchange) {
 function discUnitPrice(product, isExchange) {
   if (isExchange || SPECIAL_PRICE.has(product.shorts)) return product.price;
   if (CAT_A.has(product.shorts)) return Math.ceil(product.price * 0.9 * 20) / 20;
+  if (CAT_20.has(product.shorts)) return Math.round(product.price * 0.8 * 100) / 100;
   if (globalDiscount > 0) return Math.round(product.price * (1 - globalDiscount / 100) * 100) / 100;
   return product.price;
 }
@@ -667,6 +670,7 @@ function lineAfterDisc(product, qty, isExchange) {
 function discLabel(product, isExchange) {
   if (isExchange)                return '-';
   if (CAT_A.has(product.shorts)) return '10%';
+  if (CAT_20.has(product.shorts)) return '20%';
   if (SPECIAL_PRICE.has(product.shorts)) return 'Special';
   if (globalDiscount > 0)        return `${globalDiscount}%`;
   return '';
@@ -676,6 +680,7 @@ function calcSummary(items) {
   let subTotal        = 0;
   let totalAfterDisc  = 0;
   let seaweedDiscAmt  = 0; // J + P 10% off
+  let mat20DiscAmt    = 0; // N20/9520/1.520 20% off
   let catBDiscAmt     = 0; // Others global %
   let catBSubTotal    = 0; // Cat B full-price subtotal (for subtotal-level discount / 小计层面统一折扣)
 
@@ -686,6 +691,9 @@ function calcSummary(items) {
     if (!isExchange) {
       if (CAT_A.has(product.shorts)) {
         seaweedDiscAmt += sub - tot;
+        totalAfterDisc += tot;
+      } else if (CAT_20.has(product.shorts)) {
+        mat20DiscAmt += sub - tot;
         totalAfterDisc += tot;
       } else if (!SPECIAL_PRICE.has(product.shorts) && globalDiscount > 0) {
         catBSubTotal += sub; // accumulate at full price; discount applied after loop
@@ -710,7 +718,7 @@ function calcSummary(items) {
     cashRounding = parseFloat((cashTotal - totalAfterDisc).toFixed(2));
   }
 
-  return { subTotal, discAmt, seaweedDiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
+  return { subTotal, discAmt, seaweedDiscAmt, mat20DiscAmt, catBDiscAmt, totalAfterDisc, cashRounding, cashTotal };
 }
 
 
@@ -873,7 +881,9 @@ function buildInvoiceHTML(invNum, dateStr, storeName, items, s) {
     if (s.seaweedDiscAmt > 0) {
       footerRows += fRow('↳ Seaweed 10% Off', `-$${s.seaweedDiscAmt.toFixed(2)}`, '13px', '#ea580c');
     }
-
+    if (s.mat20DiscAmt > 0) {
+      footerRows += fRow('↳ Mat 20% Off', `-$${s.mat20DiscAmt.toFixed(2)}`, '13px', '#ea580c');
+    }
     footerRows += fRow('Discount', `-$${s.discAmt.toFixed(2)}`, '16px', '#2563eb');
   }
 
@@ -1786,7 +1796,7 @@ function renderSummaryModal(invoices, loadIn, sold) {
     });
   }
 
-  textLines.push('', '— My Sales Calc v1.2.13');
+  textLines.push('', '— My Sales Calc v1.2.14');
 
   // ── Audit / 对账框 ──────────────────────────────────────────
   const auditEl  = document.getElementById('summary-audit');
@@ -1912,9 +1922,12 @@ function buildCSV(invoices) {
     }
     items.forEach(({ product, qty, isExchange }) => {
       const isCatA    = CAT_A.has(product.shorts);
-      const discStr   = isExchange ? 'Exchange' : isCatA ? '10%' : disc > 0 ? `${disc}%` : '';
+      const isCat20   = CAT_20.has(product.shorts);
+      const discStr   = isExchange ? 'Exchange' : isCatA ? '10%' : isCat20 ? '20%' : disc > 0 ? `${disc}%` : '';
       const lineTotal = isExchange ? 0 : isCatA
         ? product.price * qty * 0.9
+        : isCat20
+        ? product.price * qty * 0.8
         : product.price * qty * (1 - disc / 100);
       rows.push([inv.dateStr, inv.invNum, inv.storeName || '', product.name, product.shorts,
         qty, product.price.toFixed(2), discStr, lineTotal.toFixed(2), ptLabel, invTotal]);
